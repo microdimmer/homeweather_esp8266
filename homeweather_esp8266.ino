@@ -47,7 +47,6 @@ byte x {0}; byte y {0};
 SoftwareSerial swSer(0, 2, false, 256); // GPIO15 (TX) and GPIO13 (RX)
 
 // CO2 SERIAL
-#define DEBUG_SERIAL Serial
 #define SENSOR_SERIAL swSer
 
 byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
@@ -75,9 +74,6 @@ WiFiManager wifiManager;
 String ssid {"YourHomeWeather"};
 //String pass {"YHWBopka"}; // пока без пароля
 
-//flag for saving data, flag if connected
-bool shouldSaveConfig, connectedFlag = false;
-
 // Sensors data
 int t { -100};
 int p { -1};
@@ -86,6 +82,12 @@ int co2 { -1};
 float tf {0};
 float pf {0};
 float hf {0};
+//flags
+bool timeSyncFlag = false;
+bool cloudSyncFlag = false;
+long wifiRSSI = 0;
+//flag for saving data, flag if connected
+bool shouldSaveConfig, connectedFlag = false;
 
 char loader[4] {'.'};
 char dots {':'};
@@ -109,27 +111,41 @@ const uint8_t custom_font30[358] U8G2_FONT_SECTION("custom_font30") =
   "\32\362CX\303\37\4\231~\371\201\25\220<StY'\231^D\2\315C\12:\11\304A\214\2\365"
   "@P\0\0\0";
 
-static const uint8_t clock_bitmap[] U8X8_PROGMEM= {
-  0xF0,0xF3,0xF8,0xF7,0x0C,0xFC,0x8C,0xFC,0x8C,0xFC,0xCC,0xFC,
-  0x0C,0xFC,0x3F,0xFC,0x9E,0xF7,0xCC,0xF3
+static const uint8_t clock_bitmap[] U8X8_PROGMEM = { //размер 11x10
+  0xF0, 0xF9, 0xF8, 0xFB, 0x0C, 0xFE, 0x4C, 0xFE, 0x4C, 0xFE, 0xCC, 0xFE,
+  0x0C, 0xFE, 0xBF, 0xFF, 0xDE, 0xFB, 0x0C, 0xF8
+};
+
+static const uint8_t sync_bitmap[] U8X8_PROGMEM = { //размер 11x10
+  0x7C, 0x00, 0xFE, 0x00, 0x83, 0x01, 0xE0, 0x07, 0xCC, 0x03, 0x9E, 0x01,
+  0x3F, 0x00, 0x0C, 0x06, 0xF8, 0x03, 0xF0, 0x01
 };
 
 void drawMainScreen() {
   u8g2.clearBuffer();
   //draw time
   u8g2.setFont(custom_font30); //30 px height
-  //  String timestr = printDigits(hour()) + dots + printDigits(minute());
-  String timestr = printDigits(minute()) + dots + printDigits(second());
-  u8g2.drawStr(20, 30 , timestr.c_str());
+  String timestr = printDigits(hour()) + dots + printDigits(minute());
+  //  String timestr = printDigits(minute()) + dots + printDigits(second());
+  u8g2.drawStr(16, 30 , timestr.c_str());
   //update dots
   ((millis() / 1000) % 2) == 0 ? dots = ':' : dots = ' ';
   //wi-fi signal quality
-  static uint8_t sig = 0;
-  static uint32_t m = millis();
-  if ((millis() - m) >1000) {sig++; m = millis();}
-  if (sig > 4) sig = 0;
-  drawSignalQuality(114, 8, sig);
-  u8g2.drawXBMP(0,0,12,10,clock_bitmap);
+  //  static uint32_t m = millis();
+  //  if ((millis() - m) > 500) {
+  //    wifiRSSI=wifiRSSI+10;
+  //    m = millis();
+  //  }
+  //  if (wifiRSSI > 90) wifiRSSI = 20;
+  if (connectedFlag) {
+    drawSignalQuality(0, 0);
+  }
+  if (timeSyncFlag) {
+    u8g2.drawXBMP(0, 10, 11, 10, clock_bitmap);
+  }
+  if (cloudSyncFlag) {
+    u8g2.drawXBMP(0, 22, 11, 10, sync_bitmap);
+  }
 
   //  if (co2 > -1) { // CO2
   //    char co2a [5];
@@ -159,30 +175,23 @@ void drawMainScreen() {
   String measurementP {"..."};
   const char degree {176};
 
-  if (t > -100) measurementT = "T: " + String(t) + degree + "C";
-  if (h > -1) measurementH = "H: " + String(h) + "%";
+  t = 23; tf = 23.4; h = 55; hf = 55;
+  if (t > -100) measurementT = String(tf, 1) + degree + "C";
+  if (h > -1) measurementH = String(h) + "%";
   if (p > -1) measurementP =  "P: " + String(p) + " mmHg";
 
   u8g2.setFont(u8g2_font_9x18_mf);
-  //  u8g2.drawStr(0, 0, String(WiFi.RSSI()).c_str());
-  //  DEBUG_SERIAL.println(WiFi.RSSI());
-  //  u8g2.drawStr(0, 0, String(123).c_str());
-  //        x = (128 - u8g2.getStrWidth(measurementa))/2;
-
   char measurementa [12];
-  x = 0;
-  y = 64 + u8g2.getDescent();
   measurementT.toCharArray(measurementa, 12);
-  u8g2.drawStr(0, y, measurementa);
+  u8g2.drawStr(0, 46, measurementa);
 
   measurementH.toCharArray(measurementa, 12);
-  x = (128 - u8g2.getStrWidth(measurementa));
-  u8g2.drawStr(x, y, measurementa);
+  u8g2.drawStr(0, 64, measurementa);
 
   y = 46;
   measurementP.toCharArray(measurementa, 12);
   x = (128 - u8g2.getStrWidth(measurementa)) / 2;
-  u8g2.drawStr(x, y, measurementa);
+  //  u8g2.drawStr(x, y, measurementa);
 
   u8g2.sendBuffer();
 }
@@ -191,21 +200,6 @@ void loading() {
   long unsigned int count {(millis() / 500) % 4};
   memset(loader, '.', count);
   memset(&loader[count], 0, 1);
-}
-
-void drawTime() {
-  u8g2.clearBuffer();
-
-  //        String timestr = String(hour())+":"+String(minute())+":"+String(second());
-  //  updateDots();
-  String timestr = printDigits(hour()) + dots + printDigits(minute());
-  //        DEBUG_SERIAL.println(timestr);
-  u8g2.setFont(u8g2_font_inb30_mf);
-  //        u8g2.setFont(u8g2_font_inb30_mn);
-  //        u8g2.setFont(u8g2_font_fub35_tn);
-  u8g2.drawStr(0, 45 , timestr.c_str());
-
-  u8g2.sendBuffer();
 }
 
 // utility for digital clock display: prints preceding colon and leading 0
@@ -227,18 +221,16 @@ void drawBoot(String msg = "Loading...") {
   u8g2.sendBuffer();
 }
 
-void drawSignalQuality( uint8_t x, uint8_t y, uint8_t s) {
-//  DEBUG_SERIAL.println(s);
-  if (s >= 0)
+void drawSignalQuality(uint8_t x, uint8_t y) {
+  y = y + 6;
+  if (wifiRSSI >= -90)
     u8g2.drawFrame(x, y, 2, 2);
-  if (s >= 1)
+  if (wifiRSSI >= -80)
     u8g2.drawFrame(x + 3, y - 2, 2, 4);
-  if (s >= 2)
+  if (wifiRSSI >= -70)
     u8g2.drawFrame(x + 6, y - 4, 2, 6);
-  if (s >= 3)
+  if (wifiRSSI >= -60)
     u8g2.drawFrame(x + 9, y - 6, 2, 8);
-//  if (s >= 4)
-//    u8g2.drawFrame(x + 12, y - 8, 2, 10);
 }
 
 void drawConnectionDetails(String ssid, String mins, String url) {
@@ -275,21 +267,19 @@ void drawConnectionDetails(String ssid, String mins, String url) {
 
 //callback notifying the need to save config
 void saveConfigCallback() {
-  DEBUG_SERIAL.println("Should save config");
+  Serial.println("Should save config");
   shouldSaveConfig = true;
 }
 
 void factoryReset() {
-  DEBUG_SERIAL.println("Resetting to factory settings");
+  Serial.println("Resetting to factory settings");
   wifiManager.resetSettings();
   SPIFFS.format();
   ESP.reset();
 }
 
 void readCO2() {
-  // CO2
   bool header_found {false};
-  char tries {0};
 
   SENSOR_SERIAL.write(cmd, 9);
   memset(response, 0, 7);
@@ -312,68 +302,93 @@ void readCO2() {
     crc++;
 
     if ( !(response[6] == crc) ) {
-      DEBUG_SERIAL.println("CO2: CRC error: " + String(crc) + " / " + String(response[6]));
+      Serial.println("CO2: CRC error: " + String(crc) + " / " + String(response[6]));
     } else {
       unsigned int responseHigh = (unsigned int) response[0];
       unsigned int responseLow = (unsigned int) response[1];
       unsigned int ppm = (256 * responseHigh) + responseLow;
       co2 = ppm;
-      DEBUG_SERIAL.println("CO2:" + String(co2));
+      Serial.println("CO2:" + String(co2));
     }
   } else {
-    DEBUG_SERIAL.println("CO2: Header not found");
+    Serial.println("CO2: Header not found");
   }
 }
 
 void readMeasurements() {
   // Read data, Temperature
-  DEBUG_SERIAL.println("Getting Temperature from BME280");
+  Serial.println("Getting Temperature from BME280");
   tf = bme.readTemperature();
   t = static_cast<int>(tf);
 
   // Humidity
-  DEBUG_SERIAL.println("Getting Humidity from BME280");
+  Serial.println("Getting Humidity from BME280");
   hf = bme.readHumidity();
   h = static_cast<int>(hf);
 
   // Pressure (in mmHg)
-  DEBUG_SERIAL.println("Getting Pressure from BME280");
+  Serial.println("Getting Pressure from BME280");
   pf = bme.readPressure() * 760.0 / 101325;
   p = static_cast<int>(pf);
 
   // CO2
-  DEBUG_SERIAL.println("Getting CO2");
+  Serial.println("Getting CO2");
   readCO2();
 
+  //WiFi SSID
+  wifiRSSI = WiFi.RSSI();
+
   // Write to debug console
-  DEBUG_SERIAL.println("H: " + String(hf) + "%");
-  DEBUG_SERIAL.println("T: " + String(tf) + "C");
-  DEBUG_SERIAL.println("P: " + String(pf) + "mmHg");
-  DEBUG_SERIAL.println("CO2: " + String(co2) + "ppm");
+  Serial.println("H: " + String(hf) + "%");
+  Serial.println("T: " + String(tf) + "C");
+  Serial.println("P: " + String(pf) + "mmHg");
+  Serial.println("CO2: " + String(co2) + "ppm");
+  Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
 }
 
 void sendMeasurements() {
   // Send to server
-  //        Blynk.virtualWrite(V1, t);
-  Blynk.virtualWrite(V1, tf);
-  Blynk.virtualWrite(V2, h);
-  Blynk.virtualWrite(V4, p);
-  Blynk.virtualWrite(V5, co2);
-  // Write to debug console
-  DEBUG_SERIAL.println("Send to Blynk server");
+  if (connectBlynk()) {
+    Blynk.virtualWrite(V1, tf);
+    Blynk.virtualWrite(V2, h);
+    Blynk.virtualWrite(V4, p);
+    Blynk.virtualWrite(V5, co2);
+
+    cloudSyncFlag = 1;
+    Serial.println("Send to Blynk server");
+  }
+  else {
+    cloudSyncFlag = 0;
+    Serial.println("Send to Blynk server fails!");
+  }
+}
+
+bool connectBlynk() {
+  if (!Blynk.connected()) {
+    Serial.println("Blync is not connectd, trying to connect...");
+    if (!Blynk.connect()) {
+      Serial.println("Failed to connect blynk...");
+      return false;
+    }
+    else {
+      Serial.println("Connected blynk");
+      return true;
+    }
+  }
+  else return true;
 }
 
 bool loadConfig() {
-  DEBUG_SERIAL.println("Load config...");
+  Serial.println("Load config...");
   File configFile = SPIFFS.open("/config.json", "r");
   if (!configFile) {
-    DEBUG_SERIAL.println("Failed to open config file");
+    Serial.println("Failed to open config file");
     return false;
   }
 
   size_t size = configFile.size();
   if (size > 1024) {
-    DEBUG_SERIAL.println("Config file size is too large");
+    Serial.println("Config file size is too large");
     return false;
   }
 
@@ -389,7 +404,7 @@ bool loadConfig() {
   JsonObject &json = jsonBuffer.parseObject(buf.get());
 
   if (!json.success()) {
-    DEBUG_SERIAL.println("Failed to parse config file");
+    Serial.println("Failed to parse config file");
     return false;
   }
 
@@ -398,18 +413,6 @@ bool loadConfig() {
   strcpy(blynk_server, json["blynk_server"]);
   strcpy(blynk_token, json["blynk_token"]);
 }
-
-//void configModeCallback (WiFiManager *wifiManager) {
-//  String url {"http://192.168.4.1"};
-//  DEBUG_SERIAL.print("Connect to WiFi:");
-//  DEBUG_SERIAL.print("net: " + ssid);
-//  //  DEBUG_SERIAL.print("pw: " + pass);
-//  DEBUG_SERIAL.print("Open browser:");
-//  DEBUG_SERIAL.print(url);
-//  DEBUG_SERIAL.print("to setup device");
-//
-//  drawConnectionDetails(ssid, pass, url);
-//}
 
 bool setupWiFi() {
   //set config save notify callback
@@ -424,13 +427,13 @@ bool setupWiFi() {
   wifiManager.addParameter(&custom_device_id);
 
   drawConnectionDetails(ssid, "2 mins", "http://192.168.4.1");
-  //  wifiManager.setTimeout(120);
-  wifiManager.setTimeout(1);
+  wifiManager.setTimeout(120);
+  //  wifiManager.setTimeout(1);
   //  wifiManager.setAPCallback(configModeCallback);
 
   if (!wifiManager.autoConnect(ssid.c_str())) {
     //  if (!wifiManager.autoConnect(ssid.c_str(), pass.c_str())) { \\ с паролем иногда не пускает, пока будем без
-    DEBUG_SERIAL.println("failed to connect and hit timeout");
+    Serial.println("failed to connect and hit timeout");
     connectedFlag = 0;
     return false;
   }
@@ -438,7 +441,7 @@ bool setupWiFi() {
 
   //save the custom parameters to FS
   if (shouldSaveConfig && connectedFlag) {
-    DEBUG_SERIAL.println("saving config");
+    Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject &json = jsonBuffer.createObject();
     json["device_id"] = custom_device_id.getValue();
@@ -446,9 +449,9 @@ bool setupWiFi() {
     json["blynk_token"] = custom_blynk_token.getValue();
     File configFile = SPIFFS.open("/config.json", "w");
     if (!configFile) {
-      DEBUG_SERIAL.println("failed to open config file for writing");
+      Serial.println("failed to open config file for writing");
     }
-    json.printTo(DEBUG_SERIAL);
+    json.printTo(Serial);
     json.printTo(configFile);
     configFile.close();
     //end save
@@ -456,15 +459,15 @@ bool setupWiFi() {
   }
 
   //if you get here you have connected to the WiFi
-  DEBUG_SERIAL.println("WiFi connected");
-  DEBUG_SERIAL.println("IP address: ");
-  DEBUG_SERIAL.println(WiFi.localIP());
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
 }
 
 // Virtual pin update FW
 BLYNK_WRITE(V22) {
   if (param.asInt() == 1) {
-    DEBUG_SERIAL.println("Got a FW update request");
+    Serial.println("Got a FW update request");
 
     char full_version[34] {""};
     strcat(full_version, device_id);
@@ -474,13 +477,13 @@ BLYNK_WRITE(V22) {
     t_httpUpdate_return ret = ESPhttpUpdate.update("http://romfrom.space/get", full_version);
     switch (ret) {
       case HTTP_UPDATE_FAILED:
-        DEBUG_SERIAL.println("[update] Update failed.");
+        Serial.println("[update] Update failed.");
         break;
       case HTTP_UPDATE_NO_UPDATES:
-        DEBUG_SERIAL.println("[update] Update no Update.");
+        Serial.println("[update] Update no Update.");
         break;
       case HTTP_UPDATE_OK:
-        DEBUG_SERIAL.println("[update] Update ok.");
+        Serial.println("[update] Update ok.");
         break;
     }
   }
@@ -514,6 +517,7 @@ time_t getNtpTime()
       secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
       secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
       secsSince1900 |= (unsigned long)packetBuffer[43];
+      timeSyncFlag = 1;
       return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
     }
   }
@@ -546,7 +550,7 @@ void sendNTPpacket(IPAddress &address)
 
 void setup() {
   // Init serial ports
-  DEBUG_SERIAL.begin(115200);
+  Serial.begin(115200);
   SENSOR_SERIAL.begin(9600);
 
   // Init I2C interface
@@ -563,12 +567,12 @@ void setup() {
 
   // Init Pressure/Temperature sensor
   if (!bme.begin(0x76)) {
-    DEBUG_SERIAL.println("Could not find a valid BME280 sensor, check wiring!");
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
   }
 
   // Init filesystem
   if (!SPIFFS.begin()) {
-    DEBUG_SERIAL.println("Failed to mount file system");
+    Serial.println("Failed to mount file system");
     ESP.reset();
   }
 
@@ -578,34 +582,33 @@ void setup() {
     // Load config
     drawBoot();
     if (!loadConfig()) {
-      DEBUG_SERIAL.println("Failed to load config");
+      Serial.println("Failed to load config");
       factoryReset();
     } else {
-      DEBUG_SERIAL.println("Config loaded");
+      Serial.println("Config loaded");
     }
 
     //set NTP time
     Udp.begin(localPort);
-    DEBUG_SERIAL.println("Local port: ");
-    DEBUG_SERIAL.println(String(Udp.localPort()));
+    Serial.println("Local port: ");
+    Serial.println(String(Udp.localPort()));
     // Setup time
     setSyncProvider(getNtpTime);
-    setSyncInterval(SECS_PER_DAY); // once a day sync
+    setSyncInterval(SECS_PER_HOUR); // once a hour sync
 
     // Start blynk
     Blynk.config(blynk_token, blynk_server, blynk_port);
-    DEBUG_SERIAL.print("blynk server: ");
-    DEBUG_SERIAL.println(blynk_server);
-    DEBUG_SERIAL.print("port: ");
-    DEBUG_SERIAL.println(blynk_port);
-    DEBUG_SERIAL.print("token: ");
-    DEBUG_SERIAL.println(blynk_token);
+    Serial.print("blynk server: ");
+    Serial.println(blynk_server);
+    Serial.print("port: ");
+    Serial.println(blynk_port);
+    Serial.print("token: ");
+    Serial.println(blynk_token);
 
     drawBoot("Connecting...");
-    DEBUG_SERIAL.println("Connecting to blynk...");
-    while (Blynk.connect() == false) {
-      delay(500);
-      DEBUG_SERIAL.println("Connecting to blynk...");
+    Serial.println("Connecting to blynk...");
+    if (!Blynk.connect()) {
+      Serial.println("Failed to connect blynk...");
     }
 
     // Setup a function to be called every n second
@@ -624,7 +627,7 @@ void loop() {
   timer.run();
   drawMainScreen();
 
-  if (connectedFlag) {
+  if (Blynk.connected()) {
     Blynk.run();
   }
 

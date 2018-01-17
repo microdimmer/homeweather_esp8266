@@ -96,11 +96,11 @@ WiFiUDP Udp;
 const char* ntpServerName = "ntp1.vniiftri.ru"; //NTP server
 const int timeZone = 5;         // GMT +5
 unsigned int localPort = 4567;  // local port to listen for UDP packets
-
+//30 px font "32,48-58"
 const uint8_t custom_font30[358] U8G2_FONT_SECTION("custom_font30") =
-  "\14\0\4\5\5\5\5\5\6\22\37\0\0\37\367\37\0\0\0\0\0\1M \6\0\300\210\2\60$\362"
+  "\14\0\4\5\5\5\5\5\6\22\37\0\0\37\367\37\0\0\0\0\0\1M \6\0\300x\2\60$\362"
   "CX\303\37\4\231\36*\267\30S\15\21\221\14!\211\20\223\4AM\61\266\234\202I\246\313\17>x"
-  "\0\61\21\347cXK\271\330,(\201\206!\244\374\377\17\62$\362CX\3Q\5\21t\14\61\211\20"
+  "\0\61\21\347gXK\271\330,(\201\206!\244\374\377\17\62$\362CX\3Q\5\21t\14\61\211\20"
   "\262\4\21Q\246e\321\345\372\203\17&'\227\351\362\3\42 y\246\0\63 \362CXCB\317@\22"
   "\305\226iYty\324\24c\313)\17H\321\245N\62]~\360\301\3\64>\362CX\3a\305\20V"
   "\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a"
@@ -108,17 +108,46 @@ const uint8_t custom_font30[358] U8G2_FONT_SECTION("custom_font30") =
   "\351\234\314?\370\200\353\262N\62\275`\202\20E\10I\206\20\204\0\66\32\362CXCB\317@\22\305"
   "\226\351\234\34\271\346\21(\242L\371\301\7\17\67\30\362CX\3Q\15\71\363\10\24Q\246e\321\345"
   "\215;\42\234\374\237\3\70\30\362CXCB\317@\22\305\226\351/\213qGD\246\277\374\340\203\7\71"
-  "\32\362CX\303\37\4\231~\371\201\25\220<StY'\231^D\2\315C\12:\11\304A\214\2\365"
+  "\32\362CX\303\37\4\231~\371\201\25\220<StY'\231^D\2\315C\12:\11\304A|\2\365"
   "@P\0\0\0";
+//14px font codes "32,46,48-57"
+const uint8_t custom_font_14[] U8G2_FONT_SECTION("custom_font_14") =
+  "\15\0\3\3\4\4\4\2\5\10\16\0\0\17\375\17\1\0\0\0\0\0\303.\6\42(\5\1\60\21\350"
+  "\250\306\3\221[\311\42\61\325\210\304\303\201\0\61\12\343\254\216\344\20\212\350\37\62\22\350\250\206h\42\71"
+  "\22\305\342\303\301\254H\274\230\4\63\22\350\250\6\351B$\212\225jt\210\230H<\34\10\64\30\350\250"
+  "\206L\42\223\310$\62\211L\42\223\310$\62\211\310R\25k\1\65\21\350\250\6\351Bd\26\37\16b"
+  "\61\221\311B\1\66\17\350\250\6\351BdV\262\34\71\36\16\4\67\16\350\250\206\310r\24k\71\134\304"
+  "z\6\70\17\350\250\6\351B\344(j\22r<\34\10\71\17\350\250\306\3\221\343\305$\26\23YN\4"
+  "C\15\310\270\6\351Bd\326\221x\61\11O\13\310\270\306\3\221?\36\16\4\0\0\0";
 
-static const uint8_t clock_bitmap[] U8X8_PROGMEM = { //размер 11x10
+//7px font codes "37,46,67,99,101,109,112,116,121,176"
+const uint8_t custom_font7[102] U8G2_FONT_SECTION("custom_font7") =
+  "\12\0\2\2\3\3\1\4\4\5\10\0\0\6\376\6\0\0\0\0\0\0M%\14}\354\242\352\6\31\244"
+  "\226L\0.\5IT\2C\12tl\206\324 \203\70\4c\7cdF\214\3e\6cdF:m"
+  "\7cd\322P*p\7cdF\32\22t\7c\134V\254\0y\10cd\222J#\1\260\6\333\336"
+  "\272\0\0\0\0";
+  
+
+static const uint8_t clock_bitmap[] U8X8_PROGMEM = { //размер 11x9
   0xF0, 0xF9, 0xF8, 0xFB, 0x0C, 0xFE, 0x4C, 0xFE, 0x4C, 0xFE, 0xCC, 0xFE,
-  0x0C, 0xFE, 0xBF, 0xFF, 0xDE, 0xFB, 0x0C, 0xF8
+  0x3F, 0xFE, 0x9E, 0xFB, 0xCC, 0xF9
 };
 
-static const uint8_t sync_bitmap[] U8X8_PROGMEM = { //размер 11x10
-  0x7C, 0x00, 0xFE, 0x00, 0x83, 0x01, 0xE0, 0x07, 0xCC, 0x03, 0x9E, 0x01,
-  0x3F, 0x00, 0x0C, 0x06, 0xF8, 0x03, 0xF0, 0x01
+static const uint8_t sync_bitmap[] U8X8_PROGMEM = { //размер 11x9
+  0x7C, 0xF8, 0xFE, 0xF8, 0x80, 0xF9, 0xEC, 0xFF, 0xDE, 0xFB, 0xBF, 0xF9,
+  0x0C, 0xF8, 0xF8, 0xFB, 0xF0, 0xF9
+};
+
+static const uint8_t temp_bitmap[] U8X8_PROGMEM = { //размер 10x14
+  0x3C, 0xFC, 0x66, 0xFC, 0xC2, 0xFD, 0x4A, 0xFC, 0xD2, 0xFC, 0x4A, 0xFC,
+  0xD2, 0xFD, 0x4A, 0xFC, 0x91, 0xFC, 0x89, 0xFC, 0xBD, 0xFC, 0x99, 0xFC,
+  0x42, 0xFC, 0x3C, 0xFC
+};
+
+static const uint8_t humid_bitmap[] U8X8_PROGMEM = { //размер 9x14
+  0x84, 0xFC, 0x40, 0xFD, 0x91, 0xFC, 0x38, 0xFC, 0x6C, 0xFC, 0xC6, 0xFC,
+  0x83, 0xFD, 0x01, 0xFD, 0x01, 0xFD, 0x01, 0xFD, 0x41, 0xFD, 0xB3, 0xFD,
+  0x82, 0xFC, 0x7C, 0xFC
 };
 
 void drawMainScreen() {
@@ -127,34 +156,53 @@ void drawMainScreen() {
   u8g2.setFont(custom_font30); //30 px height
   String timestr = printDigits(hour()) + dots + printDigits(minute());
   //  String timestr = printDigits(minute()) + dots + printDigits(second());
-  u8g2.drawStr(16, 30 , timestr.c_str());
+  u8g2.drawStr(13, 30 , timestr.c_str());
+  u8g2.setFont(u8g2_font_9x18B_tr);
+  switch (weekday()) {
+    case 2:
+      u8g2.drawStr(102, 10 , String("MON").c_str());
+      break;
+    case 3:
+      u8g2.drawStr(102, 10 , String("TUE").c_str());
+      break;
+    case 4:
+      u8g2.drawStr(102, 10 , String("WED").c_str());
+      break;
+    case 5:
+      u8g2.drawStr(102, 10 , String("THU").c_str());
+      break;
+    case 6:
+      u8g2.drawStr(102, 10 , String("FRI").c_str());
+      break;
+    case 7:
+      u8g2.drawStr(102, 10 , String("SAT").c_str());
+      break;
+    case 0:
+      u8g2.drawStr(102, 10 , String("SUN").c_str());
+      break;
+  }
   //update dots
   ((millis() / 1000) % 2) == 0 ? dots = ':' : dots = ' ';
-  //wi-fi signal quality
-  //  static uint32_t m = millis();
-  //  if ((millis() - m) > 500) {
-  //    wifiRSSI=wifiRSSI+10;
-  //    m = millis();
-  //  }
-  //  if (wifiRSSI > 90) wifiRSSI = 20;
   if (connectedFlag) {
     drawSignalQuality(0, 0);
   }
   if (timeSyncFlag) {
-    u8g2.drawXBMP(0, 10, 11, 10, clock_bitmap);
+    u8g2.drawXBMP(0, 10, 11, 9, clock_bitmap);
   }
   if (cloudSyncFlag) {
-    u8g2.drawXBMP(0, 22, 11, 10, sync_bitmap);
+    u8g2.drawXBMP(0, 21, 11, 9, sync_bitmap);
   }
 
   //  if (co2 > -1) { // CO2
   //    char co2a [5];
   //    sprintf (co2a, "%i", co2);
   //
-  //    u8g2.setFont(u8g2_font_inb19_mf);
-  //    x = (128 - u8g2.getStrWidth(co2a)) / 2;
-  //    y = u8g2.getAscent() - u8g2.getDescent();
-  //    u8g2.drawStr(x, y - 4 , co2a);
+//  u8g2.setFont(u8g2_font_7x13B_tr);
+//  u8g2.drawStr(54, 64 , String("CO").c_str());
+  co2 = 2200;
+  u8g2.setFont(custom_font_14);
+  u8g2.drawStr(56, 62 , String("CO").c_str());
+  u8g2.drawStr(78, 64 , String(co2).c_str());
   //
   //    const char ppm[] {"ppm CO2"};
   //    u8g2.setFont(u8g2_font_6x12_mf);
@@ -175,23 +223,35 @@ void drawMainScreen() {
   String measurementP {"..."};
   const char degree {176};
 
-  t = 23; tf = 23.4; h = 55; hf = 55;
-  if (t > -100) measurementT = String(tf, 1) + degree + "C";
-  if (h > -1) measurementH = String(h) + "%";
-  if (p > -1) measurementP =  "P: " + String(p) + " mmHg";
+  t = 23; tf = 28.0; h = 55; hf = 55.0;  p = 740; pf = 740.0;
+  if (t > -100) measurementT = String(tf, 1);
+  if (h > -1) measurementH = String(hf, 1);
+  if (p > -1) measurementP =  String(p);
 
-  u8g2.setFont(u8g2_font_9x18_mf);
+  //  u8g2.setFont(u8g2_font_10x20_tn);
+  u8g2.setFont(custom_font_14);
+
+  u8g2.drawXBMP(0, 50, 10, 14, temp_bitmap);
   char measurementa [12];
   measurementT.toCharArray(measurementa, 12);
-  u8g2.drawStr(0, 46, measurementa);
-
+  u8g2.drawStr(13, 64, measurementa);
+  u8g2.setFont(custom_font7);
+  u8g2.drawGlyph(46, 64, 0xb0); //degree sign
+  u8g2.drawStr(49, 64, String("C").c_str());
+  u8g2.drawGlyph(47, 48, 0x25); //percent
+  
+//  u8g2.setFont(u8g2_font_micro_tr);
+  u8g2.drawStr(117, 64 , String("y.e.").c_str());
+  u8g2.drawStr(118, 37 , String("mm").c_str());
+  u8g2.drawStr(118, 42 , String("pt.").c_str());
+  u8g2.drawStr(118, 47 , String("ct.").c_str());
+  u8g2.setFont(custom_font_14);
+  u8g2.drawXBMP(0, 33, 10, 14, humid_bitmap);
   measurementH.toCharArray(measurementa, 12);
-  u8g2.drawStr(0, 64, measurementa);
+  u8g2.drawStr(13, 47, measurementa);
 
-  y = 46;
   measurementP.toCharArray(measurementa, 12);
-  x = (128 - u8g2.getStrWidth(measurementa)) / 2;
-  //  u8g2.drawStr(x, y, measurementa);
+  u8g2.drawStr(88, 47, measurementa);
 
   u8g2.sendBuffer();
 }
@@ -346,14 +406,12 @@ void readMeasurements() {
   Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
 }
 
-void sendMeasurements() {
-  // Send to server
+void sendMeasurements() {   // Send to server
   if (connectBlynk()) {
     Blynk.virtualWrite(V1, tf);
     Blynk.virtualWrite(V2, h);
     Blynk.virtualWrite(V4, p);
     Blynk.virtualWrite(V5, co2);
-
     cloudSyncFlag = 1;
     Serial.println("Send to Blynk server");
   }
@@ -427,8 +485,8 @@ bool setupWiFi() {
   wifiManager.addParameter(&custom_device_id);
 
   drawConnectionDetails(ssid, "2 mins", "http://192.168.4.1");
-  wifiManager.setTimeout(120);
-  //  wifiManager.setTimeout(1);
+  //  wifiManager.setTimeout(120);
+  wifiManager.setTimeout(1);
   //  wifiManager.setAPCallback(configModeCallback);
 
   if (!wifiManager.autoConnect(ssid.c_str())) {
@@ -522,12 +580,12 @@ time_t getNtpTime()
     }
   }
   Serial.println("No NTP Response :-(");
+  timeSyncFlag = 0;
   return 0; // return 0 if unable to get the time
 }
 
 // send an NTP request to the time server at the given address
-void sendNTPpacket(IPAddress &address)
-{
+void sendNTPpacket(IPAddress &address) {
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request
@@ -605,11 +663,8 @@ void setup() {
     Serial.print("token: ");
     Serial.println(blynk_token);
 
-    drawBoot("Connecting...");
-    Serial.println("Connecting to blynk...");
-    if (!Blynk.connect()) {
-      Serial.println("Failed to connect blynk...");
-    }
+    drawBoot("Connect to Blynk");
+    connectBlynk();
 
     // Setup a function to be called every n second
     timer.setInterval(10000L, readMeasurements);

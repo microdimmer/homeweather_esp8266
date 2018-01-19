@@ -97,28 +97,29 @@ const char* ntpServerName = "ntp1.vniiftri.ru"; //NTP server
 const int timeZone = 5;         // GMT +5
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 //30 px font "32,48-58"
-const uint8_t custom_font30[358] U8G2_FONT_SECTION("custom_font30") =
-  "\14\0\4\5\5\5\5\5\6\22\37\0\0\37\367\37\0\0\0\0\0\1M \6\0\300x\2\60$\362"
+const uint8_t custom_font30[] U8G2_FONT_SECTION("custom_font30") =
+  "\14\0\4\5\5\5\5\5\6\22\37\0\0\37\367\37\0\0\0\0\0\1I \6\0\300x\2\60$\362"
   "CX\303\37\4\231\36*\267\30S\15\21\221\14!\211\20\223\4AM\61\266\234\202I\246\313\17>x"
   "\0\61\21\347gXK\271\330,(\201\206!\244\374\377\17\62$\362CX\3Q\5\21t\14\61\211\20"
   "\262\4\21Q\246e\321\345\372\203\17&'\227\351\362\3\42 y\246\0\63 \362CXCB\317@\22"
   "\305\226iYty\324\24c\313)\17H\321\245N\62]~\360\301\3\64>\362CX\3a\305\20V"
   "\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a"
-  "\305\20V\14a\305\20V\14A\316<\2E\243E\227\277\1\0\65!\362CXCB\317@\22\305\226"
-  "\351\234\314?\370\200\353\262N\62\275`\202\20E\10I\206\20\204\0\66\32\362CXCB\317@\22\305"
-  "\226\351\234\34\271\346\21(\242L\371\301\7\17\67\30\362CX\3Q\15\71\363\10\24Q\246e\321\345"
-  "\215;\42\234\374\237\3\70\30\362CXCB\317@\22\305\226\351/\213qGD\246\277\374\340\203\7\71"
-  "\32\362CX\303\37\4\231~\371\201\25\220<StY'\231^D\2\315C\12:\11\304A|\2\365"
-  "@P\0\0\0";
-//14px font codes "32,46,48-57"
+  "\305\20V\14a\305\20V\14A\316<\2E\243E\227\277\1\0\65\35\362CXCB\317@\22\305\226"
+  "\351\234\314?\370\200\353\262N\62]Z\1\311\63\16\1\66\32\362CXCB\317@\22\305\226\351\234\34"
+  "\271\346\21(\242L\371\301\7\17\67\30\362CX\3Q\15\71\363\10\24Q\246e\321\345\215;\42\234"
+  "\374\237\3\70\30\362CXCB\317@\22\305\226\351/\213qGD\246\277\374\340\203\7\71\32\362CX"
+  "\303\37\4\231~\371\201\25\220<StY'\231^D\2\315C\12:\11\304A|\2\365@P\0\0"
+  "\0";
+
+//8x14px font codes "30,31,46,48-57"
 const uint8_t custom_font_14[] U8G2_FONT_SECTION("custom_font_14") =
-  "\15\0\3\3\4\4\4\2\5\10\16\0\0\17\375\17\1\0\0\0\0\0\303.\6\42(\5\1\60\21\350"
-  "\250\306\3\221[\311\42\61\325\210\304\303\201\0\61\12\343\254\216\344\20\212\350\37\62\22\350\250\206h\42\71"
-  "\22\305\342\303\301\254H\274\230\4\63\22\350\250\6\351B$\212\225jt\210\230H<\34\10\64\30\350\250"
-  "\206L\42\223\310$\62\211L\42\223\310$\62\211\310R\25k\1\65\21\350\250\6\351Bd\26\37\16b"
-  "\61\221\311B\1\66\17\350\250\6\351BdV\262\34\71\36\16\4\67\16\350\250\206\310r\24k\71\134\304"
-  "z\6\70\17\350\250\6\351B\344(j\22r<\34\10\71\17\350\250\306\3\221\343\305$\26\23YN\4"
-  "C\15\310\270\6\351Bd\326\221x\61\11O\13\310\270\306\3\221?\36\16\4\0\0\0";
+  "\15\0\3\5\4\4\4\1\5\10\16\0\0\17\375\17\1\0\0\0\0\0\265\36\16\350XO(\61#\310"
+  "\4\213\3\0\37\16\350XO\260\370\67$\306\210\12\3\0.\6\42\230\202\0\60\20\350XC\42\331"
+  "\12\31\21b\250\30A\202\22\61\12\343\134G\10\242 \342\37\62\16\350XC\42A\301\202)\213HP"
+  "\2\63\17\350XC\42A\301\42\231,\230 A\11\64\33\350XC\230\20aB\204\11\21&D\230\20"
+  "aB\204\11\21&\4\252`\261\0\65\16\350XC\42\311\202!\13&HP\2\66\14\350XC\42\311"
+  "\202%\222Q\2\67\15\350XC\242`\261\70\21,\236\1\70\13\350XC\42\31)\222Q\2\71\15\350"
+  "XC\42\31%\13&HP\2\0\0\0";
 
 //7px font codes "37,46,67,99,101,109,112,116,121,176"
 const uint8_t custom_font7[102] U8G2_FONT_SECTION("custom_font7") =
@@ -126,7 +127,15 @@ const uint8_t custom_font7[102] U8G2_FONT_SECTION("custom_font7") =
   "\226L\0.\5IT\2C\12tl\206\324 \203\70\4c\7cdF\214\3e\6cdF:m"
   "\7cd\322P*p\7cdF\32\22t\7c\134V\254\0y\10cd\222J#\1\260\6\333\336"
   "\272\0\0\0\0";
-  
+
+//rus font codes "66,86,68,75,78,79,80,82,83,84,89,67"
+const uint8_t rus_font[] U8G2_FONT_SECTION("rus_font") =
+  "\14\0\3\3\3\4\1\1\5\7\12\0\0\12\375\12\375\0\0\0\0\0\223B\16\326/*\25\241\260R"
+  "\21\221.\25\0C\12\326/D\234\16\221\242\16D\21\327oJ%\211H\42\12\211B\222\303AF\23"
+  "K\15\326/D,*\241\31I\242\304$N\13\326/D\234\16\7\21'\1O\14\326o(\207\20\237"
+  "\16\21\12\0P\10\326/\236\370\223\0R\14\326/*\207\20\351`\21j\4S\14\326o(\42F\235"
+  "H\22\12\0T\11\326/\16%\241~\2V\14\326/*\42\246\213\210\323\5\0Y\17\327\61d\64\211"
+  "\222DD\134\225\15\205\0\0\0\0";
 
 static const uint8_t clock_bitmap[] U8X8_PROGMEM = { //размер 11x9
   0xF0, 0xF9, 0xF8, 0xFB, 0x0C, 0xFE, 0x4C, 0xFE, 0x4C, 0xFE, 0xCC, 0xFE,
@@ -150,39 +159,24 @@ static const uint8_t humid_bitmap[] U8X8_PROGMEM = { //размер 9x14
   0x82, 0xFC, 0x7C, 0xFC
 };
 
+static const uint8_t co_bitmap[] U8X8_PROGMEM = { //размер 9x14
+  0x1C, 0x8E, 0x3E, 0x9F, 0xA3, 0xB1, 0x83, 0xB1, 0x83, 0xB1, 0x83, 0xB1,
+  0x83, 0xB1, 0x83, 0x91, 0xC3, 0xE1, 0xE3, 0xC1, 0x3E, 0xAF, 0x1C, 0xEE
+};
+
+static const uint8_t p_bitmap[] U8X8_PROGMEM = { //размер 9x14
+  0x63, 0xC4, 0xC6, 0xDC, 0x8C, 0xC5, 0x08, 0xFD, 0x8C, 0xC5, 0xC6, 0xDC,
+  0x63, 0xC4, 0x21, 0xFC, 0x6B, 0xC5, 0xCE, 0xDD, 0x8C, 0xC5, 0xEF, 0xFD
+};
+
 void drawMainScreen() {
   u8g2.clearBuffer();
   //draw time
-  u8g2.setFont(custom_font30); //30 px height
-  String timestr = printDigits(hour()) + dots + printDigits(minute());
-  //  String timestr = printDigits(minute()) + dots + printDigits(second());
-  u8g2.drawStr(13, 30 , timestr.c_str());
-  u8g2.setFont(u8g2_font_9x18B_tr);
-  switch (weekday()) {
-    case 2:
-      u8g2.drawStr(102, 10 , String("MON").c_str());
-      break;
-    case 3:
-      u8g2.drawStr(102, 10 , String("TUE").c_str());
-      break;
-    case 4:
-      u8g2.drawStr(102, 10 , String("WED").c_str());
-      break;
-    case 5:
-      u8g2.drawStr(102, 10 , String("THU").c_str());
-      break;
-    case 6:
-      u8g2.drawStr(102, 10 , String("FRI").c_str());
-      break;
-    case 7:
-      u8g2.drawStr(102, 10 , String("SAT").c_str());
-      break;
-    case 0:
-      u8g2.drawStr(102, 10 , String("SUN").c_str());
-      break;
-  }
+  u8g2.setFont(custom_font30);
+  u8g2.drawStr(13, 30 , String(printDigits(hour()) + dots + printDigits(minute())).c_str());
   //update dots
   ((millis() / 1000) % 2) == 0 ? dots = ':' : dots = ' ';
+
   if (connectedFlag) {
     drawSignalQuality(0, 0);
   }
@@ -193,65 +187,40 @@ void drawMainScreen() {
     u8g2.drawXBMP(0, 21, 11, 9, sync_bitmap);
   }
 
-  //  if (co2 > -1) { // CO2
-  //    char co2a [5];
-  //    sprintf (co2a, "%i", co2);
-  //
-//  u8g2.setFont(u8g2_font_7x13B_tr);
-//  u8g2.drawStr(54, 64 , String("CO").c_str());
-  co2 = 2200;
+  u8g2.setFont(rus_font);
+  u8g2.drawStr(107, 28, weekdayRus(weekday()).c_str());
+
   u8g2.setFont(custom_font_14);
-  u8g2.drawStr(56, 62 , String("CO").c_str());
-  u8g2.drawStr(78, 64 , String(co2).c_str());
-  //
-  //    const char ppm[] {"ppm CO2"};
-  //    u8g2.setFont(u8g2_font_6x12_mf);
-  //    x = (128 - u8g2.getStrWidth(ppm)) / 2;
-  //    y = y - 4 + u8g2.getAscent() - u8g2.getDescent();
-  //    u8g2.drawStr(x, y, ppm);
-  //  } else {
-  //    loading();
-  //    u8g2.setFont(u8g2_font_inb19_mf);
-  //    x = (128 - u8g2.getStrWidth(loader)) / 2;
-  //    y = u8g2.getAscent() - u8g2.getDescent();
-  //    u8g2.drawStr(x, y, loader);
-  //  }
+  u8g2.drawStr(108, 14 , printDigits(day()).c_str());
 
-  // Cycle Temp, Humidity, Pressure
-  String measurementT {"..."};
-  String measurementH {"..."};
-  String measurementP {"..."};
-  const char degree {176};
+  //  t = 23; tf = 28.0; h = 55; hf = 55.0;  p = 740; pf = 740.0; co2 = 888;
+  u8g2.drawXBMP(60, 52, 15, 12, co_bitmap);
+  Serial.println(String(u8g2.getStrWidth(String(co2).c_str())));
+  //  u8g2.drawStr(116-u8g2.getStrWidth(String(co2).c_str()), 64 , String(co2).c_str());
+  if (co2 > 999)
+    u8g2.drawStr(78, 64 , String(co2).c_str());
+  else
+    u8g2.drawStr(88, 64 , String(co2).c_str());
 
-  t = 23; tf = 28.0; h = 55; hf = 55.0;  p = 740; pf = 740.0;
-  if (t > -100) measurementT = String(tf, 1);
-  if (h > -1) measurementH = String(hf, 1);
-  if (p > -1) measurementP =  String(p);
-
-  //  u8g2.setFont(u8g2_font_10x20_tn);
-  u8g2.setFont(custom_font_14);
-
+  // Temp, Humidity, Pressure
   u8g2.drawXBMP(0, 50, 10, 14, temp_bitmap);
-  char measurementa [12];
-  measurementT.toCharArray(measurementa, 12);
-  u8g2.drawStr(13, 64, measurementa);
+  u8g2.drawStr(13, 64, String(tf, 1).c_str());
+
+  u8g2.drawXBMP(0, 33, 10, 14, humid_bitmap);
+  u8g2.drawStr(13, 47, String(hf, 1).c_str());
+
+  u8g2.drawXBMP(60, 36, 14, 12, p_bitmap);
+  u8g2.drawGlyph(78, 47, 30); //arrow up   (31) arrow down
+  u8g2.drawStr(88, 47, String(p).c_str());
+
   u8g2.setFont(custom_font7);
   u8g2.drawGlyph(46, 64, 0xb0); //degree sign
   u8g2.drawStr(49, 64, String("C").c_str());
   u8g2.drawGlyph(47, 48, 0x25); //percent
-  
-//  u8g2.setFont(u8g2_font_micro_tr);
   u8g2.drawStr(117, 64 , String("y.e.").c_str());
   u8g2.drawStr(118, 37 , String("mm").c_str());
   u8g2.drawStr(118, 42 , String("pt.").c_str());
   u8g2.drawStr(118, 47 , String("ct.").c_str());
-  u8g2.setFont(custom_font_14);
-  u8g2.drawXBMP(0, 33, 10, 14, humid_bitmap);
-  measurementH.toCharArray(measurementa, 12);
-  u8g2.drawStr(13, 47, measurementa);
-
-  measurementP.toCharArray(measurementa, 12);
-  u8g2.drawStr(88, 47, measurementa);
 
   u8g2.sendBuffer();
 }
@@ -270,6 +239,27 @@ String printDigits(int digits) {
   }
   formattedstr = formattedstr + String(digits);
   return formattedstr;
+}
+
+String weekdayRus(byte weekday) {
+  switch (weekday) {
+    case 2:
+      return "PON";
+    case 3:
+      return "VTR";
+    case 4:
+      return "SRD";
+    case 5:
+      return "CTV";
+    case 6:
+      return "PTN";
+    case 7:
+      return "SYB";
+    case 0:
+      return "VSK";
+    default:
+      return "0";
+  }
 }
 
 void drawBoot(String msg = "Loading...") {
@@ -485,8 +475,8 @@ bool setupWiFi() {
   wifiManager.addParameter(&custom_device_id);
 
   drawConnectionDetails(ssid, "2 mins", "http://192.168.4.1");
-  //  wifiManager.setTimeout(120);
-  wifiManager.setTimeout(1);
+  wifiManager.setTimeout(60);
+//  wifiManager.setTimeout(1);
   //  wifiManager.setAPCallback(configModeCallback);
 
   if (!wifiManager.autoConnect(ssid.c_str())) {

@@ -78,10 +78,16 @@ String ssid {"YourHomeWeather"};
 int t { -100};
 int p { -1};
 int h { -1};
-int co2 { -1};
+int co2 { 0};
 float tf {0};
 float pf {0};
 float hf {0};
+// Math data
+//http://mathhelpplanet.com/static.php?p=onlayn-mnk-i-regressionniy-analiz
+//http://exceltip.ru/%D0%BC%D0%B5%D1%82%D0%BE%D0%B4-%D0%BD%D0%B0%D0%B8%D0%BC%D0%B5%D0%BD%D1%8C%D1%88%D0%B8%D1%85-%D0%BA%D0%B2%D0%B0%D0%B4%D1%80%D0%B0%D1%82%D0%BE%D0%B2-%D0%B2-excel-%D0%B8%D1%81%D0%BF%D0%BE%D0%BB%D1%8C/
+#define P_LEN 6
+float p_array[P_LEN];
+float delta;
 //flags
 bool timeSyncFlag = false;
 bool cloudSyncFlag = false;
@@ -113,13 +119,14 @@ const uint8_t custom_font30[] U8G2_FONT_SECTION("custom_font30") =
 
 //8x14px font codes "30,31,46,48-57"
 const uint8_t custom_font_14[] U8G2_FONT_SECTION("custom_font_14") =
-  "\15\0\3\5\4\4\4\1\5\10\16\0\0\17\375\17\1\0\0\0\0\0\265\36\16\350XO(\61#\310"
-  "\4\213\3\0\37\16\350XO\260\370\67$\306\210\12\3\0.\6\42\230\202\0\60\20\350XC\42\331"
-  "\12\31\21b\250\30A\202\22\61\12\343\134G\10\242 \342\37\62\16\350XC\42A\301\202)\213HP"
-  "\2\63\17\350XC\42A\301\42\231,\230 A\11\64\33\350XC\230\20aB\204\11\21&D\230\20"
-  "aB\204\11\21&\4\252`\261\0\65\16\350XC\42\311\202!\13&HP\2\66\14\350XC\42\311"
-  "\202%\222Q\2\67\15\350XC\242`\261\70\21,\236\1\70\13\350XC\42\31)\222Q\2\71\15\350"
-  "XC\42\31%\13&HP\2\0\0\0";
+  "\17\0\3\5\4\4\4\3\5\10\16\0\0\17\375\17\1\0\0\0\0\0\317\34\14\226i-aD\14\11"
+  "\24O\0\35\14\226i-\201\342\311\10\61A\0\36\16\350H=\241\304\214 \23,\376\15\0\37\16\350"
+  "H=\301\342\337\220\30#*\14\0.\6\42H\12\2\60\20\350H\15\211d+dD\210\241b\4\11"
+  "J\61\12\343L\35!\210\202\210\62\16\350H\15\211\4\5\13\246,\42A\11\63\17\350H\15\211\4"
+  "\5\213d\262`\202\4%\64\34\350H\15aB\204\11\21&D\230\20aB\204\11\21&D\230\20\250"
+  "\202\305\2\0\65\16\350H\15\211$\13\206,\230 A\11\66\14\350H\15\211$\13\226HF\11\67\16"
+  "\350H\15\211\202\305\342D\260x\6\0\70\13\350H\15\211d\244HF\11\71\15\350H\15\211d\224,"
+  "\230 A\11\0\0\0";
 
 //7px font codes "37,46,67,99,101,109,112,116,121,176"
 const uint8_t custom_font7[102] U8G2_FONT_SECTION("custom_font7") =
@@ -173,7 +180,7 @@ void drawMainScreen() {
   u8g2.clearBuffer();
   //draw time
   u8g2.setFont(custom_font30);
-  u8g2.drawStr(13, 30 , String(printDigits(hour()) + dots + printDigits(minute())).c_str());
+  u8g2.drawStr(15, 30 , String(printDigits(hour()) + dots + printDigits(minute())).c_str());
   //update dots
   ((millis() / 1000) % 2) == 0 ? dots = ':' : dots = ' ';
 
@@ -193,42 +200,49 @@ void drawMainScreen() {
   u8g2.setFont(custom_font_14);
   u8g2.drawStr(108, 14 , printDigits(day()).c_str());
 
-  //  t = 23; tf = 28.0; h = 55; hf = 55.0;  p = 740; pf = 740.0; co2 = 888;
+  //  t = 23; tf = 8.0; h = 55; hf = 85.0;  p = 740; pf = 740.0;
+  //    co2 = 3526;
+  //CO2
+  String co2String = String(co2);
   u8g2.drawXBMP(60, 52, 15, 12, co_bitmap);
-  Serial.println(String(u8g2.getStrWidth(String(co2).c_str())));
-  //  u8g2.drawStr(116-u8g2.getStrWidth(String(co2).c_str()), 64 , String(co2).c_str());
-  if (co2 > 999)
-    u8g2.drawStr(78, 64 , String(co2).c_str());
-  else
-    u8g2.drawStr(88, 64 , String(co2).c_str());
-
+  u8g2.drawStr(117 - (co2String.length() * 10), 64 , co2String.c_str());
   // Temp, Humidity, Pressure
-  u8g2.drawXBMP(0, 50, 10, 14, temp_bitmap);
-  u8g2.drawStr(13, 64, String(tf, 1).c_str());
+  String tfString = String(tf, 1);
+  u8g2.drawXBMP(2, 50, 10, 14, temp_bitmap);
+  u8g2.drawStr(55 - (tfString.length() * 10), 64, tfString.c_str());
 
-  u8g2.drawXBMP(0, 33, 10, 14, humid_bitmap);
-  u8g2.drawStr(13, 47, String(hf, 1).c_str());
+  String hfString = String(hf, 1);
+  u8g2.drawXBMP(2, 33, 10, 14, humid_bitmap);
+  u8g2.drawStr(55 - (hfString.length() * 10), 47, hfString.c_str());
 
   u8g2.drawXBMP(60, 36, 14, 12, p_bitmap);
-  u8g2.drawGlyph(78, 47, 30); //arrow up   (31) arrow down
-  u8g2.drawStr(88, 47, String(p).c_str());
+
+  if (delta > 2) {
+    u8g2.drawGlyph(76, 47, 30); //big arrow up (28-29) small arrow up/down (30-31) arrow up/down
+  }
+  else if (delta > 1) {
+    u8g2.drawGlyph(76, 47, 28); //small arrow up   
+  }
+  else if (delta < -2) {
+    u8g2.drawGlyph(76, 47, 31); //big arrow down   
+  }
+  else if (delta < -1) {
+    u8g2.drawGlyph(76, 47, 29); //big arrow down   
+  }  
+
+//  u8g2.drawGlyph(76, 47, 29); //arrow up   (28-29) small arrow up/down (30-31) arrow up/down
+  u8g2.drawStr(87, 47, String(p).c_str());
 
   u8g2.setFont(custom_font7);
-  u8g2.drawGlyph(46, 64, 0xb0); //degree sign
-  u8g2.drawStr(49, 64, String("C").c_str());
-  u8g2.drawGlyph(47, 48, 0x25); //percent
+  u8g2.drawGlyph(48, 64, 0xb0); //degree sign
+  u8g2.drawStr(51, 64, String("C").c_str());
+  u8g2.drawGlyph(49, 48, 0x25); //percent
   u8g2.drawStr(117, 64 , String("y.e.").c_str());
-  u8g2.drawStr(118, 37 , String("mm").c_str());
-  u8g2.drawStr(118, 42 , String("pt.").c_str());
-  u8g2.drawStr(118, 47 , String("ct.").c_str());
+  u8g2.drawStr(117, 37 , String("mm").c_str());
+  u8g2.drawStr(117, 42 , String("pt.").c_str());
+  u8g2.drawStr(117, 47 , String("ct.").c_str());
 
   u8g2.sendBuffer();
-}
-
-void loading() {
-  long unsigned int count {(millis() / 500) % 4};
-  memset(loader, '.', count);
-  memset(&loader[count], 0, 1);
 }
 
 // utility for digital clock display: prints preceding colon and leading 0
@@ -367,22 +381,18 @@ void readCO2() {
 
 void readMeasurements() {
   // Read data, Temperature
-  Serial.println("Getting Temperature from BME280");
   tf = bme.readTemperature();
   t = static_cast<int>(tf);
 
   // Humidity
-  Serial.println("Getting Humidity from BME280");
   hf = bme.readHumidity();
   h = static_cast<int>(hf);
 
   // Pressure (in mmHg)
-  Serial.println("Getting Pressure from BME280");
   pf = bme.readPressure() * 760.0 / 101325;
-  p = static_cast<int>(pf);
+  p = static_cast<int>(floor(pf + 0.5));
 
   // CO2
-  Serial.println("Getting CO2");
   readCO2();
 
   //WiFi SSID
@@ -391,17 +401,42 @@ void readMeasurements() {
   // Write to debug console
   Serial.println("H: " + String(hf) + "%");
   Serial.println("T: " + String(tf) + "C");
-  Serial.println("P: " + String(pf) + "mmHg");
+  Serial.println("Pf: " + String(pf, 1) + "mmHg");
   Serial.println("CO2: " + String(co2) + "ppm");
   Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
+}
+
+void read_p_arr() {
+  for (byte i = 0; i < P_LEN - 1; i++) {
+    p_array[i] = p_array[i + 1];
+  }
+  p_array[P_LEN - 1] = bme.readPressure() * 760.0 / 101325;
+
+  float sumX = 0, sumY = 0, sumX2 = 0, sumXY = 0;
+  for (int i = 0; i < P_LEN; i++) {
+    sumX += i + 1;
+    sumY += p_array[i];
+    sumX2 += (i + 1) * (i + 1);
+    sumXY += (i + 1) * p_array[i];
+  }
+  float a = 0;
+  a = sumX * sumY;
+  a = a - P_LEN * sumXY;
+  a = a / (sumX * sumX - P_LEN * sumX2);
+  delta = a * 3 ; // delta of changing pressure for 3 hours
+  Serial.println("delta ");
+  Serial.print(delta);
+  Blynk.virtualWrite(V4, delta);
+  Blynk.virtualWrite(V5, p);
 }
 
 void sendMeasurements() {   // Send to server
   if (connectBlynk()) {
     Blynk.virtualWrite(V1, tf);
     Blynk.virtualWrite(V2, h);
-    Blynk.virtualWrite(V4, p);
-    Blynk.virtualWrite(V5, co2);
+    //    Blynk.virtualWrite(V4, p);
+
+    //    Blynk.virtualWrite(V5, co2);
     cloudSyncFlag = 1;
     Serial.println("Send to Blynk server");
   }
@@ -476,7 +511,7 @@ bool setupWiFi() {
 
   drawConnectionDetails(ssid, "2 mins", "http://192.168.4.1");
   wifiManager.setTimeout(60);
-//  wifiManager.setTimeout(1);
+  //  wifiManager.setTimeout(1);
   //  wifiManager.setAPCallback(configModeCallback);
 
   if (!wifiManager.autoConnect(ssid.c_str())) {
@@ -639,7 +674,7 @@ void setup() {
     //set NTP time
     Udp.begin(localPort);
     Serial.println("Local port: ");
-    Serial.println(String(Udp.localPort()));
+    Serial.print(String(Udp.localPort()));
     // Setup time
     setSyncProvider(getNtpTime);
     setSyncInterval(SECS_PER_HOUR); // once a hour sync
@@ -655,10 +690,18 @@ void setup() {
 
     drawBoot("Connect to Blynk");
     connectBlynk();
-
+    //    Serial.println("generating p array to predict pressure dropping");
+    pf = bme.readPressure() * 760.0 / 101325;
+    for (byte i = 0; i < P_LEN; i++) { // generating p array to predict pressure dropping
+      p_array[i] = pf;
+      //      Serial.println(p_array[i]);
+    }
     // Setup a function to be called every n second
     timer.setInterval(10000L, readMeasurements);
     timer.setInterval(30000L, sendMeasurements);
+    timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr);
+    //    timer.setInterval(20000L, read_p_arr);
+
     readMeasurements();
   }
   else {

@@ -11,7 +11,6 @@
 #include <WiFiUdp.h>
 //Time lib
 #include <TimeLib.h>
-
 // OTA updates
 #include <ESP8266httpUpdate.h>
 // Blynk
@@ -20,7 +19,6 @@
 #include <Bounce2.h> //https://github.com/thomasfredericks/Bounce2
 // JSON
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
-
 // GPIO Defines
 #define I2C_SDA 5 // D1 Orange
 #define I2C_SCL 4 // D2 Yellow
@@ -37,7 +35,8 @@
 #include <SPI.h>
 #include <U8g2lib.h>
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, /* clock E=*/ 14, /* data R/W=*/ 13, /* RS=*/ 15);
-byte x {0}; byte y {0};
+
+#include "graphics.h"
 
 // Handy timers
 #include <SimpleTimer.h>
@@ -84,8 +83,8 @@ float pf {0};
 float hf {0};
 // Math data
 //http://mathhelpplanet.com/static.php?p=onlayn-mnk-i-regressionniy-analiz
-//http://exceltip.ru/%D0%BC%D0%B5%D1%82%D0%BE%D0%B4-%D0%BD%D0%B0%D0%B8%D0%BC%D0%B5%D0%BD%D1%8C%D1%88%D0%B8%D1%85-%D0%BA%D0%B2%D0%B0%D0%B4%D1%80%D0%B0%D1%82%D0%BE%D0%B2-%D0%B2-excel-%D0%B8%D1%81%D0%BF%D0%BE%D0%BB%D1%8C/
-#define P_LEN 6
+//http://bit.ly/1DIbvyj
+#define P_LEN 4
 float p_array[P_LEN];
 float delta;
 //flags
@@ -95,86 +94,17 @@ long wifiRSSI = 0;
 //flag for saving data, flag if connected
 bool shouldSaveConfig, connectedFlag = false;
 
-char loader[4] {'.'};
 char dots {':'};
+
+const uint16_t pwm_light[6] = {0,64,96,128,192,256};
+uint8_t light_mode {0};
 
 WiFiUDP Udp;
 const char* ntpServerName = "ntp1.vniiftri.ru"; //NTP server
 const int timeZone = 5;         // GMT +5
 unsigned int localPort = 4567;  // local port to listen for UDP packets
-//30 px font "32,48-58"
-const uint8_t custom_font30[] U8G2_FONT_SECTION("custom_font30") =
-  "\14\0\4\5\5\5\5\5\6\22\37\0\0\37\367\37\0\0\0\0\0\1I \6\0\300x\2\60$\362"
-  "CX\303\37\4\231\36*\267\30S\15\21\221\14!\211\20\223\4AM\61\266\234\202I\246\313\17>x"
-  "\0\61\21\347gXK\271\330,(\201\206!\244\374\377\17\62$\362CX\3Q\5\21t\14\61\211\20"
-  "\262\4\21Q\246e\321\345\372\203\17&'\227\351\362\3\42 y\246\0\63 \362CXCB\317@\22"
-  "\305\226iYty\324\24c\313)\17H\321\245N\62]~\360\301\3\64>\362CX\3a\305\20V"
-  "\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a\305\20V\14a"
-  "\305\20V\14a\305\20V\14A\316<\2E\243E\227\277\1\0\65\35\362CXCB\317@\22\305\226"
-  "\351\234\314?\370\200\353\262N\62]Z\1\311\63\16\1\66\32\362CXCB\317@\22\305\226\351\234\34"
-  "\271\346\21(\242L\371\301\7\17\67\30\362CX\3Q\15\71\363\10\24Q\246e\321\345\215;\42\234"
-  "\374\237\3\70\30\362CXCB\317@\22\305\226\351/\213qGD\246\277\374\340\203\7\71\32\362CX"
-  "\303\37\4\231~\371\201\25\220<StY'\231^D\2\315C\12:\11\304A|\2\365@P\0\0"
-  "\0";
-
-//8x14px font codes "30,31,46,48-57"
-const uint8_t custom_font_14[] U8G2_FONT_SECTION("custom_font_14") =
-  "\17\0\3\5\4\4\4\3\5\10\16\0\0\17\375\17\1\0\0\0\0\0\317\34\14\226i-aD\14\11"
-  "\24O\0\35\14\226i-\201\342\311\10\61A\0\36\16\350H=\241\304\214 \23,\376\15\0\37\16\350"
-  "H=\301\342\337\220\30#*\14\0.\6\42H\12\2\60\20\350H\15\211d+dD\210\241b\4\11"
-  "J\61\12\343L\35!\210\202\210\62\16\350H\15\211\4\5\13\246,\42A\11\63\17\350H\15\211\4"
-  "\5\213d\262`\202\4%\64\34\350H\15aB\204\11\21&D\230\20aB\204\11\21&D\230\20\250"
-  "\202\305\2\0\65\16\350H\15\211$\13\206,\230 A\11\66\14\350H\15\211$\13\226HF\11\67\16"
-  "\350H\15\211\202\305\342D\260x\6\0\70\13\350H\15\211d\244HF\11\71\15\350H\15\211d\224,"
-  "\230 A\11\0\0\0";
-
-//7px font codes "37,46,67,99,101,109,112,116,121,176"
-const uint8_t custom_font7[102] U8G2_FONT_SECTION("custom_font7") =
-  "\12\0\2\2\3\3\1\4\4\5\10\0\0\6\376\6\0\0\0\0\0\0M%\14}\354\242\352\6\31\244"
-  "\226L\0.\5IT\2C\12tl\206\324 \203\70\4c\7cdF\214\3e\6cdF:m"
-  "\7cd\322P*p\7cdF\32\22t\7c\134V\254\0y\10cd\222J#\1\260\6\333\336"
-  "\272\0\0\0\0";
-
-//rus font codes "66,86,68,75,78,79,80,82,83,84,89,67"
-const uint8_t rus_font[] U8G2_FONT_SECTION("rus_font") =
-  "\14\0\3\3\3\4\1\1\5\7\12\0\0\12\375\12\375\0\0\0\0\0\223B\16\326/*\25\241\260R"
-  "\21\221.\25\0C\12\326/D\234\16\221\242\16D\21\327oJ%\211H\42\12\211B\222\303AF\23"
-  "K\15\326/D,*\241\31I\242\304$N\13\326/D\234\16\7\21'\1O\14\326o(\207\20\237"
-  "\16\21\12\0P\10\326/\236\370\223\0R\14\326/*\207\20\351`\21j\4S\14\326o(\42F\235"
-  "H\22\12\0T\11\326/\16%\241~\2V\14\326/*\42\246\213\210\323\5\0Y\17\327\61d\64\211"
-  "\222DD\134\225\15\205\0\0\0\0";
-
-static const uint8_t clock_bitmap[] U8X8_PROGMEM = { //размер 11x9
-  0xF0, 0xF9, 0xF8, 0xFB, 0x0C, 0xFE, 0x4C, 0xFE, 0x4C, 0xFE, 0xCC, 0xFE,
-  0x3F, 0xFE, 0x9E, 0xFB, 0xCC, 0xF9
-};
-
-static const uint8_t sync_bitmap[] U8X8_PROGMEM = { //размер 11x9
-  0x7C, 0xF8, 0xFE, 0xF8, 0x80, 0xF9, 0xEC, 0xFF, 0xDE, 0xFB, 0xBF, 0xF9,
-  0x0C, 0xF8, 0xF8, 0xFB, 0xF0, 0xF9
-};
-
-static const uint8_t temp_bitmap[] U8X8_PROGMEM = { //размер 10x14
-  0x3C, 0xFC, 0x66, 0xFC, 0xC2, 0xFD, 0x4A, 0xFC, 0xD2, 0xFC, 0x4A, 0xFC,
-  0xD2, 0xFD, 0x4A, 0xFC, 0x91, 0xFC, 0x89, 0xFC, 0xBD, 0xFC, 0x99, 0xFC,
-  0x42, 0xFC, 0x3C, 0xFC
-};
-
-static const uint8_t humid_bitmap[] U8X8_PROGMEM = { //размер 9x14
-  0x84, 0xFC, 0x40, 0xFD, 0x91, 0xFC, 0x38, 0xFC, 0x6C, 0xFC, 0xC6, 0xFC,
-  0x83, 0xFD, 0x01, 0xFD, 0x01, 0xFD, 0x01, 0xFD, 0x41, 0xFD, 0xB3, 0xFD,
-  0x82, 0xFC, 0x7C, 0xFC
-};
-
-static const uint8_t co_bitmap[] U8X8_PROGMEM = { //размер 9x14
-  0x1C, 0x8E, 0x3E, 0x9F, 0xA3, 0xB1, 0x83, 0xB1, 0x83, 0xB1, 0x83, 0xB1,
-  0x83, 0xB1, 0x83, 0x91, 0xC3, 0xE1, 0xE3, 0xC1, 0x3E, 0xAF, 0x1C, 0xEE
-};
-
-static const uint8_t p_bitmap[] U8X8_PROGMEM = { //размер 9x14
-  0x63, 0xC4, 0xC6, 0xDC, 0x8C, 0xC5, 0x08, 0xFD, 0x8C, 0xC5, 0xC6, 0xDC,
-  0x63, 0xC4, 0x21, 0xFC, 0x6B, 0xC5, 0xCE, 0xDD, 0x8C, 0xC5, 0xEF, 0xFD
-};
+const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
+byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
 
 void drawMainScreen() {
   u8g2.clearBuffer();
@@ -221,16 +151,16 @@ void drawMainScreen() {
     u8g2.drawGlyph(76, 47, 30); //big arrow up (28-29) small arrow up/down (30-31) arrow up/down
   }
   else if (delta > 1) {
-    u8g2.drawGlyph(76, 47, 28); //small arrow up   
+    u8g2.drawGlyph(76, 47, 28); //small arrow up
   }
   else if (delta < -2) {
-    u8g2.drawGlyph(76, 47, 31); //big arrow down   
+    u8g2.drawGlyph(76, 47, 31); //big arrow down
   }
   else if (delta < -1) {
-    u8g2.drawGlyph(76, 47, 29); //big arrow down   
-  }  
+    u8g2.drawGlyph(76, 47, 29); //big arrow down
+  }
 
-//  u8g2.drawGlyph(76, 47, 29); //arrow up   (28-29) small arrow up/down (30-31) arrow up/down
+  //  u8g2.drawGlyph(76, 47, 29); //arrow up   (28-29) small arrow up/down (30-31) arrow up/down
   u8g2.drawStr(87, 47, String(p).c_str());
 
   u8g2.setFont(custom_font7);
@@ -279,6 +209,7 @@ String weekdayRus(byte weekday) {
 void drawBoot(String msg = "Loading...") {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_9x18_mf);
+  byte x {0}; byte y {0};
   x = (128 - u8g2.getStrWidth(msg.c_str())) / 2;
   y = 32 + u8g2.getAscent() / 2;
   u8g2.drawStr(x, y, msg.c_str());
@@ -300,7 +231,8 @@ void drawSignalQuality(uint8_t x, uint8_t y) {
 void drawConnectionDetails(String ssid, String mins, String url) {
   String msg {""};
   u8g2.clearBuffer();
-
+  byte x {0}; byte y {0};
+  
   msg = "Connect to WiFi:";
   u8g2.setFont(u8g2_font_7x13_mf);
   x = (128 - u8g2.getStrWidth(msg.c_str())) / 2;
@@ -329,7 +261,7 @@ void drawConnectionDetails(String ssid, String mins, String url) {
   u8g2.sendBuffer();
 }
 
-//callback notifying the need to save config
+//callback notifying when need to save config
 void saveConfigCallback() {
   Serial.println("Should save config");
   shouldSaveConfig = true;
@@ -426,7 +358,6 @@ void read_p_arr() {
   delta = a * 3 ; // delta of changing pressure for 3 hours
   Serial.println("delta ");
   Serial.print(delta);
-  Blynk.virtualWrite(V4, delta);
   Blynk.virtualWrite(V5, p);
 }
 
@@ -434,9 +365,10 @@ void sendMeasurements() {   // Send to server
   if (connectBlynk()) {
     Blynk.virtualWrite(V1, tf);
     Blynk.virtualWrite(V2, h);
-    //    Blynk.virtualWrite(V4, p);
-
+    Blynk.virtualWrite(V4, p);
     //    Blynk.virtualWrite(V5, co2);
+    Blynk.virtualWrite(V6, delta);
+
     cloudSyncFlag = 1;
     Serial.println("Send to Blynk server");
   }
@@ -509,8 +441,8 @@ bool setupWiFi() {
   wifiManager.addParameter(&custom_blynk_token);
   wifiManager.addParameter(&custom_device_id);
 
-  drawConnectionDetails(ssid, "2 mins", "http://192.168.4.1");
-  wifiManager.setTimeout(60);
+  drawConnectionDetails(ssid, "3 mins", "http://192.168.4.1");
+  wifiManager.setTimeout(180);
   //  wifiManager.setTimeout(1);
   //  wifiManager.setAPCallback(configModeCallback);
 
@@ -577,9 +509,15 @@ BLYNK_WRITE(V23) {
   factoryReset();
 }
 
-/*-------- NTP code ----------*/
-const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
-byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
+// Virtual pin PWM mode
+BLYNK_WRITE(V25) {
+//  if (++light_mode >= 6) light_mode = 0; 
+//  analogWrite(12, pwm_light[light_mode]);
+//  Serial.println();
+//  Serial.println(light_mode);
+//  Serial.println(pwm_light[light_mode]);
+//  Serial.println();
+}
 
 time_t getNtpTime()
 {
@@ -632,10 +570,10 @@ void sendNTPpacket(IPAddress &address) {
 }
 
 void setup() {
+  analogWrite(12, 64);
   // Init serial ports
   Serial.begin(115200);
   SENSOR_SERIAL.begin(9600);
-
   // Init I2C interface
   Wire.begin(I2C_SDA, I2C_SCL);
 
@@ -659,8 +597,15 @@ void setup() {
     ESP.reset();
   }
 
-  // Setup WiFi
-  drawBoot("WiFi...");
+  timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr);
+  timer.setInterval(10000L, readMeasurements);
+  readMeasurements();
+//  pf = bme.readPressure() * 760.0 / 101325;
+  for (byte i = 0; i < P_LEN; i++) { // generating p array to predict pressure dropping
+    p_array[i] = pf;
+  }
+  
+  drawBoot("WiFi..."); // Setup WiFi
   if (setupWiFi()) {
     // Load config
     drawBoot();
@@ -690,23 +635,8 @@ void setup() {
 
     drawBoot("Connect to Blynk");
     connectBlynk();
-    //    Serial.println("generating p array to predict pressure dropping");
-    pf = bme.readPressure() * 760.0 / 101325;
-    for (byte i = 0; i < P_LEN; i++) { // generating p array to predict pressure dropping
-      p_array[i] = pf;
-      //      Serial.println(p_array[i]);
-    }
     // Setup a function to be called every n second
-    timer.setInterval(10000L, readMeasurements);
     timer.setInterval(30000L, sendMeasurements);
-    timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr);
-    //    timer.setInterval(20000L, read_p_arr);
-
-    readMeasurements();
-  }
-  else {
-    timer.setInterval(10000L, readMeasurements);
-    readMeasurements();
   }
 }
 
@@ -715,18 +645,11 @@ void loop() {
   timer.run();
   drawMainScreen();
 
+  //  Serial.println(analogRead(A0));
+
   if (Blynk.connected()) {
     Blynk.run();
   }
-
-  //      Switch every 5 seconds
-  //  switch ((millis() / 5000) % 2) {
-  //    case 0:
-  //      drawTime();
-  //      break;
-  //    default:
-
-  //  }
 
   //  hwReset.update();
   //  if (hwReset.fell()) {

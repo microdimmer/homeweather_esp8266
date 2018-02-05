@@ -1,74 +1,58 @@
 #include <FS.h>
 #include <Arduino.h>
-#include <ESP8266WiFi.h>          //https://github.com/esp8266/Arduino
-// Wifi Manager
-#include <DNSServer.h>
+#include <SPI.h>
+#include <Wire.h>
+#include <SoftwareSerial.h>
+#include <ESP8266WiFi.h> // Wifi Manager https://github.com/esp8266/Arduino
 #include <ESP8266WebServer.h>
-#include <WiFiManager.h>         //https://github.com/tzapu/WiFiManager
-// HTTP requests
-#include <ESP8266HTTPClient.h>
-//for NTP
-#include <WiFiUdp.h>
-//Time lib
+#include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
+#include <DNSServer.h>
+#include <ESP8266HTTPClient.h> // HTTP requests
+#include <WiFiUdp.h> //NTP
 #include <TimeLib.h>
-// OTA updates
-#include <ESP8266httpUpdate.h>
-// Blynk
-#include <BlynkSimpleEsp8266.h>
-// Debounce
-#include <Bounce2.h> //https://github.com/thomasfredericks/Bounce2
-// JSON
+#include <ESP8266httpUpdate.h> // OTA updates
+#include <BlynkSimpleEsp8266.h> // Blynk
+#include <Bounce2.h> // Debounce https://github.com/thomasfredericks/Bounce2
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
+#include <SimpleTimer.h> // Handy timers
 // GPIO Defines
-#define I2C_SDA 5 // D1 Orange
-#define I2C_SCL 4 // D2 Yellow
+#define I2C_SDA 5 // D1, SDA pin, GPIO5 for BME280
+#define I2C_SCL 4 // D2, SCL pin, GPIO4 for BME280
+#define PWM_PIN 0 //D3, GPIO0, for ST7920
+#define SCLK_PIN 12 // D6, E pin, GPIO12, for ST7920
+#define RW_PIN 13 // D7, R/W pin, GPIO13, for ST7920
+#define RS_PIN 15 // D8, RS pin, GPIO15, for ST7920
+#define TX_PIN 2 //D4, RX pin, GPIO2, for mz-h19
+#define RX_PIN 14 //D5, TX pin, GPIO14, for mz-h19
+
 //#define HW_RESET 12 //TODO
 // Debounce interval in ms
 //#define DEBOUNCE_INTERVAL 10
 //Bounce hwReset {Bounce()};
 
-// Humidity/Temperature/Pressure
+#include <U8g2lib.h>
+U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0,/*display-clock E,SCLK;esp-GPIO12,D6*/SCLK_PIN,/*display-data R/W;esp-GPIO13,D7*/RW_PIN,/*display-RS;esp-GPIO15,D8*/RS_PIN);
+
+// Humidity/Temperature/Pressure/CO2
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
-#include <Wire.h>
-
-#include <SPI.h>
-#include <U8g2lib.h>
-U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0, /* clock E=*/ 14, /* data R/W=*/ 13, /* RS=*/ 15);
-
-#include "graphics.h"
-
-// Handy timers
-#include <SimpleTimer.h>
-
-// SW Serial
-#include <SoftwareSerial.h>
-SoftwareSerial swSer(0, 2, false, 256); // GPIO15 (TX) and GPIO13 (RX)
-
-// CO2 SERIAL
-#define SENSOR_SERIAL swSer
-
+Adafruit_BME280 bme;
+SoftwareSerial swSer(RX_PIN, TX_PIN, false, 256);// CO2 SERIAL
 byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
 unsigned char response[7];
-
-// Pressure and temperature
-Adafruit_BME280 bme;
 
 // Blynk token
 char blynk_token[33] {"7ca0a9293079453499aa5453883510cf"};
 char blynk_server[64] {"blynk-cloud.com"};
 const uint16_t blynk_port {8442};
-
 // Device Id
 char device_id[17] = "Home Weather";
 const char fw_ver[17] = "0.1.0";
-
 // Handy timer
 SimpleTimer timer;
-
 // Setup Wifi connection
 WiFiManager wifiManager;
-
+#define WIFI_TIMEOUT 10
 // Network credentials
 String ssid {"YourHomeWeather"};
 //String pass {"YHWBopka"}; // пока без пароля
@@ -105,6 +89,9 @@ const int timeZone = 5;         // GMT +5
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
+
+#include "graphics.h"
+
 
 void drawMainScreen() {
   u8g2.clearBuffer();
@@ -277,18 +264,18 @@ void factoryReset() {
 void readCO2() {
   bool header_found {false};
 
-  SENSOR_SERIAL.write(cmd, 9);
+  swSer.write(cmd, 9);
   memset(response, 0, 7);
 
   // Looking for packet start
-  while (SENSOR_SERIAL.available() && (!header_found)) {
-    if (SENSOR_SERIAL.read() == 0xff ) {
-      if (SENSOR_SERIAL.read() == 0x86 ) header_found = true;
+  while (swSer.available() && (!header_found)) {
+    if (swSer.read() == 0xff ) {
+      if (swSer.read() == 0x86 ) header_found = true;
     }
   }
 
   if (header_found) {
-    SENSOR_SERIAL.readBytes(response, 7);
+    swSer.readBytes(response, 7);
 
     byte crc = 0x86;
     for (char i = 0; i < 6; i++) {
@@ -442,7 +429,7 @@ bool setupWiFi() {
   wifiManager.addParameter(&custom_device_id);
 
   drawConnectionDetails(ssid, "3 mins", "http://192.168.4.1");
-  wifiManager.setTimeout(180);
+  wifiManager.setTimeout(WIFI_TIMEOUT);
   //  wifiManager.setTimeout(1);
   //  wifiManager.setAPCallback(configModeCallback);
 
@@ -511,12 +498,12 @@ BLYNK_WRITE(V23) {
 
 // Virtual pin PWM mode
 BLYNK_WRITE(V25) {
-//  if (++light_mode >= 6) light_mode = 0; 
-//  analogWrite(12, pwm_light[light_mode]);
-//  Serial.println();
-//  Serial.println(light_mode);
-//  Serial.println(pwm_light[light_mode]);
-//  Serial.println();
+  if (++light_mode >= 6) light_mode = 0; 
+  analogWrite(PWM_PIN, pwm_light[light_mode]);
+  Serial.println();
+  Serial.println(light_mode);
+  Serial.println(pwm_light[light_mode]);
+  Serial.println();
 }
 
 time_t getNtpTime()
@@ -570,10 +557,10 @@ void sendNTPpacket(IPAddress &address) {
 }
 
 void setup() {
-  analogWrite(12, 64);
+  analogWrite(PWM_PIN, 64);
   // Init serial ports
   Serial.begin(115200);
-  SENSOR_SERIAL.begin(9600);
+  swSer.begin(9600);
   // Init I2C interface
   Wire.begin(I2C_SDA, I2C_SCL);
 
@@ -585,14 +572,12 @@ void setup() {
   // Init display
   u8g2.begin();
   drawBoot();
-
-  // Init Pressure/Temperature sensor
-  if (!bme.begin(0x76)) {
+  
+  if (!bme.begin(0x76)) { // Init Pressure/Temperature sensor
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
   }
 
-  // Init filesystem
-  if (!SPIFFS.begin()) {
+  if (!SPIFFS.begin()) {  // Init filesystem
     Serial.println("Failed to mount file system");
     ESP.reset();
   }
@@ -600,7 +585,6 @@ void setup() {
   timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr);
   timer.setInterval(10000L, readMeasurements);
   readMeasurements();
-//  pf = bme.readPressure() * 760.0 / 101325;
   for (byte i = 0; i < P_LEN; i++) { // generating p array to predict pressure dropping
     p_array[i] = pf;
   }
@@ -635,13 +619,11 @@ void setup() {
 
     drawBoot("Connect to Blynk");
     connectBlynk();
-    // Setup a function to be called every n second
-    timer.setInterval(30000L, sendMeasurements);
+    timer.setInterval(30000L, sendMeasurements);// Setup a function to be called every n second
   }
 }
 
 void loop() {
-
   timer.run();
   drawMainScreen();
 

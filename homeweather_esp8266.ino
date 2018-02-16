@@ -15,6 +15,9 @@
 #include <Bounce2.h> // Debounce https://github.com/thomasfredericks/Bounce2
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 #include <SimpleTimer.h> // Handy timers
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+#include <U8g2lib.h>
 // GPIO Defines
 #define I2C_SDA 5 // D1, SDA pin, GPIO5 for BME280
 #define I2C_SCL 4 // D2, SCL pin, GPIO4 for BME280
@@ -30,12 +33,10 @@
 //#define DEBOUNCE_INTERVAL 10
 //Bounce hwReset {Bounce()};
 
-#include <U8g2lib.h>
+//display ST7920
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0,/*display-clock E,SCLK;esp-GPIO12,D6*/SCLK_PIN,/*display-data R/W;esp-GPIO13,D7*/RW_PIN,/*display-RS;esp-GPIO15,D8*/RS_PIN);
 
 // Humidity/Temperature/Pressure/CO2
-#include <Adafruit_Sensor.h>
-#include <Adafruit_BME280.h>
 Adafruit_BME280 bme;
 SoftwareSerial swSer(RX_PIN, TX_PIN, false, 256);// CO2 SERIAL
 byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
@@ -52,7 +53,7 @@ const char fw_ver[17] = "0.1.0";
 SimpleTimer timer;
 // Setup Wifi connection
 WiFiManager wifiManager;
-#define WIFI_TIMEOUT 10
+#define WIFI_TIMEOUT 180
 // Network credentials
 String ssid {"YourHomeWeather"};
 //String pass {"YHWBopka"}; // пока без пароля
@@ -627,7 +628,7 @@ void loop() {
   timer.run();
   drawMainScreen();
 
-  //  Serial.println(analogRead(A0));
+  Serial.println(analogRead(A0));
 
   if (Blynk.connected()) {
     Blynk.run();

@@ -8,16 +8,24 @@
 #include <WiFiManager.h> //https://github.com/tzapu/WiFiManager
 #include <DNSServer.h>
 #include <ESP8266HTTPClient.h> // HTTP requests
-#include <WiFiUdp.h> //NTP
+#include <WiFiUdp.h> //for NTP
+#include <AsyncPing.h> //async pinger
 #include <TimeLib.h>
 #include <ESP8266httpUpdate.h> // OTA updates
 #include <BlynkSimpleEsp8266.h> // Blynk
-#include <Bounce2.h> // Debounce https://github.com/thomasfredericks/Bounce2
+// #include <Bounce2.h> // Debounce https://github.com/thomasfredericks/Bounce2
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 #include <SimpleTimer.h> // Handy timers
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BME280.h>
 #include <U8g2lib.h>
+
+//Preferences
+#define PING_SERV 8.8.8.8
+IPAddress addrs[3];
+#define WIFI_TIMEOUT 180
+#define SSID "YourHomeWeather" // Network credentials
+//String pass {"YHWBopka"}; // Wi-Fi AP password
 // GPIO Defines
 #define I2C_SDA 5 // D1, SDA pin, GPIO5 for BME280
 #define I2C_SCL 4 // D2, SCL pin, GPIO4 for BME280
@@ -53,10 +61,6 @@ const char fw_ver[17] = "0.1.0";
 SimpleTimer timer;
 // Setup Wifi connection
 WiFiManager wifiManager;
-#define WIFI_TIMEOUT 180
-// Network credentials
-String ssid {"YourHomeWeather"};
-//String pass {"YHWBopka"}; // пока без пароля
 
 // Sensors data
 int t { -100};
@@ -66,26 +70,34 @@ int co2 { 0};
 float tf {0};
 float pf {0};
 float hf {0};
-// Math data
-//http://mathhelpplanet.com/static.php?p=onlayn-mnk-i-regressionniy-analiz
-//http://bit.ly/1DIbvyj
+uint16_t light;
+uint16_t adc_data;
+#define NUM_KEYS 3
+int  adc_key_val[NUM_KEYS] = {100, 200, 360};
+
+// Math data for pressure calculating see http://bit.ly/1EXW1I9 http://bit.ly/1DIbvyj
 #define P_LEN 4
 float p_array[P_LEN];
 float delta;
 //flags
+volatile bool connectedInetFlag = false; //flag if connected
 bool timeSyncFlag = false;
 bool cloudSyncFlag = false;
+bool shouldSaveConfig = false; //flag for saving data
+bool connectedWiFiFlag = false; //flag if connected Wi-Fi
+
 long wifiRSSI = 0;
-//flag for saving data, flag if connected
-bool shouldSaveConfig, connectedFlag = false;
 
 char dots {':'};
 
-const uint16_t pwm_light[6] = {0,64,96,128,192,256};
+const uint16_t pwm_light[6] = {0, 64, 96, 128, 192, 256};
 uint8_t light_mode {0};
 
+AsyncPing aping;
+
 WiFiUDP Udp;
-const char* ntpServerName = "ntp1.vniiftri.ru"; //NTP server
+const char* ntpServerName = "ntp1.vniiftri.ru"; //NTP server name
+IPAddress ntpServerIP(89, 109, 251, 21); //NTP server IP
 const int timeZone = 5;         // GMT +5
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
@@ -93,6 +105,67 @@ byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
 
 #include "graphics.h"
 
+time_t getNtpTime() {
+  //  if (connectedInetFlag) {
+  while (Udp.parsePacket() > 0) ; // discard any previously received packets
+  Serial.println("Transmit NTP Request");
+  // IPAddress timeServer;
+  // WiFi.hostByName(ntpServerName, timeServer);
+  // sendNTPpacket(timeServer);
+  sendNTPpacket(ntpServerIP);
+  uint32_t beginWait = millis();
+  while (millis() - beginWait < 1500) {
+    int size = Udp.parsePacket();
+    if (size >= NTP_PACKET_SIZE) {
+      Serial.println("Receive NTP Response");
+      Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
+      unsigned long secsSince1900;
+      // convert four bytes starting at location 40 to a long integer
+      secsSince1900 =  (unsigned long)packetBuffer[40] << 24;
+      secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
+      secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
+      secsSince1900 |= (unsigned long)packetBuffer[43];
+      timeSyncFlag = 1;
+      return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
+    }
+  }
+  //  }
+  Serial.println("No NTP Response :-(");
+  timeSyncFlag = 0;
+  return 0; // return 0 if unable to get the time
+}
+
+void sendNTPpacket(IPAddress &address) { // send an NTP request to the time server at the given address
+  // set all bytes in the buffer to 0
+  memset(packetBuffer, 0, NTP_PACKET_SIZE);
+  // Initialize values needed to form NTP request
+  // (see URL above for details on the packets)
+  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
+  packetBuffer[1] = 0;     // Stratum, or type of clock
+  packetBuffer[2] = 6;     // Polling Interval
+  packetBuffer[3] = 0xEC;  // Peer Clock Precision
+  // 8 bytes of zero for Root Delay & Root Dispersion
+  packetBuffer[12]  = 49;
+  packetBuffer[13]  = 0x4E;
+  packetBuffer[14]  = 49;
+  packetBuffer[15]  = 52;
+  // all NTP fields have been given values, now
+  // you can send a packet requesting a timestamp:
+  Udp.beginPacket(address, 123); //NTP requests are to port 123
+  Udp.write(packetBuffer, NTP_PACKET_SIZE);
+  Udp.endPacket();
+}
+
+void syncTime() {
+  setTime(getNtpTime());
+  timeStatus_t t_status = timeStatus();
+  if (t_status == timeNotSet)
+    Serial.println("Time never been synced");
+  else if (t_status == timeNeedsSync)
+    Serial.println("Time is need to sync");
+  else if (t_status == timeSet)
+    Serial.println("Time is synced");
+}
 
 void drawMainScreen() {
   u8g2.clearBuffer();
@@ -102,7 +175,7 @@ void drawMainScreen() {
   //update dots
   ((millis() / 1000) % 2) == 0 ? dots = ':' : dots = ' ';
 
-  if (connectedFlag) {
+  if (connectedWiFiFlag) {
     drawSignalQuality(0, 0);
   }
   if (timeSyncFlag) {
@@ -194,7 +267,7 @@ String weekdayRus(byte weekday) {
   }
 }
 
-void drawBoot(String msg = "Loading...") {
+void drawBoot(String msg) {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_9x18_mf);
   byte x {0}; byte y {0};
@@ -205,22 +278,31 @@ void drawBoot(String msg = "Loading...") {
 }
 
 void drawSignalQuality(uint8_t x, uint8_t y) {
+  if (!connectedInetFlag) {
+    u8g2.drawLine(x, y, x + 2, y + 2);
+    u8g2.drawLine(x, y + 2, x + 2, y);
+  }
+  else {
+    u8g2.drawLine(x, y + 2, x + 2, y);
+    u8g2.drawLine(x, y, x, y + 2);
+  }
   y = y + 6;
   if (wifiRSSI >= -90)
-    u8g2.drawFrame(x, y, 2, 2);
+    u8g2.drawFrame(x, y, x + 2, y - 4);
   if (wifiRSSI >= -80)
-    u8g2.drawFrame(x + 3, y - 2, 2, 4);
+    u8g2.drawFrame(x + 3, y - 2, x + 2, y - 2);
   if (wifiRSSI >= -70)
-    u8g2.drawFrame(x + 6, y - 4, 2, 6);
-  if (wifiRSSI >= -60)
-    u8g2.drawFrame(x + 9, y - 6, 2, 8);
+    u8g2.drawFrame(x + 6, y - 4, x + 2, y);
+  if (wifiRSSI >= -65)
+    u8g2.drawFrame(x + 9, y - 6, x + 2, y + 2);
+
 }
 
 void drawConnectionDetails(String ssid, String mins, String url) {
   String msg {""};
   u8g2.clearBuffer();
   byte x {0}; byte y {0};
-  
+
   msg = "Connect to WiFi:";
   u8g2.setFont(u8g2_font_7x13_mf);
   x = (128 - u8g2.getStrWidth(msg.c_str())) / 2;
@@ -300,29 +382,23 @@ void readCO2() {
 }
 
 void readMeasurements() {
-  // Read data, Temperature
-  tf = bme.readTemperature();
+  tf = bme.readTemperature(); //Temperature
   t = static_cast<int>(tf);
-
-  // Humidity
-  hf = bme.readHumidity();
+  hf = bme.readHumidity(); //Humidity
   h = static_cast<int>(hf);
-
   // Pressure (in mmHg)
   pf = bme.readPressure() * 760.0 / 101325;
   p = static_cast<int>(floor(pf + 0.5));
-
-  // CO2
-  readCO2();
-
-  //WiFi SSID
-  wifiRSSI = WiFi.RSSI();
-
+  readCO2();// CO2
+  wifiRSSI = WiFi.RSSI(); //WiFi signal strength (RSSI)
+  if (adc_data > 400)
+    light = adc_data;
   // Write to debug console
   Serial.println("H: " + String(hf) + "%");
   Serial.println("T: " + String(tf) + "C");
   Serial.println("Pf: " + String(pf, 1) + "mmHg");
   Serial.println("CO2: " + String(co2) + "ppm");
+  Serial.println("Light sensor: " + String(light));
   Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
 }
 
@@ -350,20 +426,27 @@ void read_p_arr() {
 }
 
 void sendMeasurements() {   // Send to server
-  if (connectBlynk()) {
-    Blynk.virtualWrite(V1, tf);
-    Blynk.virtualWrite(V2, h);
-    Blynk.virtualWrite(V4, p);
-    //    Blynk.virtualWrite(V5, co2);
-    Blynk.virtualWrite(V6, delta);
+  if (connectedInetFlag) {
+    if (timeStatus() == timeNotSet)
+      syncTime();
+    if (connectBlynk()) {
+      Blynk.virtualWrite(V1, tf);
+      Blynk.virtualWrite(V2, h);
+      Blynk.virtualWrite(V4, p);
+      //    Blynk.virtualWrite(V5, co2); TODO
+      Blynk.virtualWrite(V6, delta);
+      Blynk.virtualWrite(V7, light);
 
-    cloudSyncFlag = 1;
-    Serial.println("Send to Blynk server");
+      cloudSyncFlag = 1;
+      Serial.println("Send to Blynk server");
+    }
+    else {
+      cloudSyncFlag = 0;
+      Serial.println("Send to Blynk server fails!");
+    }
   }
-  else {
+  else
     cloudSyncFlag = 0;
-    Serial.println("Send to Blynk server fails!");
-  }
 }
 
 bool connectBlynk() {
@@ -379,6 +462,10 @@ bool connectBlynk() {
     }
   }
   else return true;
+}
+
+void asyncPing() {
+  aping.begin(ntpServerIP, 3);
 }
 
 bool loadConfig() {
@@ -429,21 +516,21 @@ bool setupWiFi() {
   wifiManager.addParameter(&custom_blynk_token);
   wifiManager.addParameter(&custom_device_id);
 
-  drawConnectionDetails(ssid, "3 mins", "http://192.168.4.1");
+  drawConnectionDetails(SSID, "3 mins", "http://192.168.4.1");
   wifiManager.setTimeout(WIFI_TIMEOUT);
   //  wifiManager.setTimeout(1);
   //  wifiManager.setAPCallback(configModeCallback);
 
-  if (!wifiManager.autoConnect(ssid.c_str())) {
+  if (!wifiManager.autoConnect(SSID)) {
     //  if (!wifiManager.autoConnect(ssid.c_str(), pass.c_str())) { \\ с паролем иногда не пускает, пока будем без
     Serial.println("failed to connect and hit timeout");
-    connectedFlag = 0;
+    connectedWiFiFlag = false;
     return false;
   }
-  else connectedFlag = true;
+  else connectedWiFiFlag = true;
 
   //save the custom parameters to FS
-  if (shouldSaveConfig && connectedFlag) {
+  if (shouldSaveConfig && connectedWiFiFlag) {
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject &json = jsonBuffer.createObject();
@@ -463,7 +550,7 @@ bool setupWiFi() {
 
   //if you get here you have connected to the WiFi
   Serial.println("WiFi connected");
-  Serial.println("IP address: ");
+  Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
 }
 
@@ -499,7 +586,7 @@ BLYNK_WRITE(V23) {
 
 // Virtual pin PWM mode
 BLYNK_WRITE(V25) {
-  if (++light_mode >= 6) light_mode = 0; 
+  if (++light_mode >= 6) light_mode = 0;
   analogWrite(PWM_PIN, pwm_light[light_mode]);
   Serial.println();
   Serial.println(light_mode);
@@ -507,135 +594,122 @@ BLYNK_WRITE(V25) {
   Serial.println();
 }
 
-time_t getNtpTime()
-{
-  while (Udp.parsePacket() > 0) ; // discard any previously received packets
-  Serial.println("Transmit NTP Request");
-  IPAddress timeServer;
-  WiFi.hostByName(ntpServerName, timeServer);
-  sendNTPpacket(timeServer);
-  uint32_t beginWait = millis();
-  while (millis() - beginWait < 1500) {
-    int size = Udp.parsePacket();
-    if (size >= NTP_PACKET_SIZE) {
-      Serial.println("Receive NTP Response");
-      Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
-      unsigned long secsSince1900;
-      // convert four bytes starting at location 40 to a long integer
-      secsSince1900 =  (unsigned long)packetBuffer[40] << 24;
-      secsSince1900 |= (unsigned long)packetBuffer[41] << 16;
-      secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
-      secsSince1900 |= (unsigned long)packetBuffer[43];
-      timeSyncFlag = 1;
-      return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
-    }
-  }
-  Serial.println("No NTP Response :-(");
-  timeSyncFlag = 0;
-  return 0; // return 0 if unable to get the time
-}
-
-// send an NTP request to the time server at the given address
-void sendNTPpacket(IPAddress &address) {
-  // set all bytes in the buffer to 0
-  memset(packetBuffer, 0, NTP_PACKET_SIZE);
-  // Initialize values needed to form NTP request
-  // (see URL above for details on the packets)
-  packetBuffer[0] = 0b11100011;   // LI, Version, Mode
-  packetBuffer[1] = 0;     // Stratum, or type of clock
-  packetBuffer[2] = 6;     // Polling Interval
-  packetBuffer[3] = 0xEC;  // Peer Clock Precision
-  // 8 bytes of zero for Root Delay & Root Dispersion
-  packetBuffer[12]  = 49;
-  packetBuffer[13]  = 0x4E;
-  packetBuffer[14]  = 49;
-  packetBuffer[15]  = 52;
-  // all NTP fields have been given values, now
-  // you can send a packet requesting a timestamp:
-  Udp.beginPacket(address, 123); //NTP requests are to port 123
-  Udp.write(packetBuffer, NTP_PACKET_SIZE);
-  Udp.endPacket();
-}
-
 void setup() {
-  analogWrite(PWM_PIN, 64);
-  // Init serial ports
-  Serial.begin(115200);
-  swSer.begin(9600);
-  // Init I2C interface
-  Wire.begin(I2C_SDA, I2C_SCL);
-
-  // Setup HW reset
-  //  pinMode(HW_RESET, INPUT_PULLUP);
-  //  hwReset.interval(DEBOUNCE_INTERVAL);
-  //  hwReset.attach(HW_RESET);
-
+  analogWrite(PWM_PIN, 64); //set backlight
+  Serial.begin(115200); //debug sensor serial port
+  swSer.begin(9600); // init CO2 sensor serial port
+  Wire.begin(I2C_SDA, I2C_SCL);  // init I2C interface
   // Init display
   u8g2.begin();
-  drawBoot();
-  
-  if (!bme.begin(0x76)) { // Init Pressure/Temperature sensor
+  drawBoot("loading...");
+
+  if (!bme.begin(0x76)) { // init Pressure/Temperature sensor
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
   }
 
-  if (!SPIFFS.begin()) {  // Init filesystem
+  if (!SPIFFS.begin()) {  // init filesystem
     Serial.println("Failed to mount file system");
     ESP.reset();
   }
 
-  timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr);
-  timer.setInterval(10000L, readMeasurements);
   readMeasurements();
-  for (byte i = 0; i < P_LEN; i++) { // generating p array to predict pressure dropping
+  for (byte i = 0; i < P_LEN; i++) { //generating p array to predict pressure dropping
     p_array[i] = pf;
   }
-  
-  drawBoot("WiFi..."); // Setup WiFi
+
   if (setupWiFi()) {
-    // Load config
-    drawBoot();
     if (!loadConfig()) {
       Serial.println("Failed to load config");
       factoryReset();
     } else {
       Serial.println("Config loaded");
     }
-
-    //set NTP time
-    Udp.begin(localPort);
-    Serial.println("Local port: ");
-    Serial.print(String(Udp.localPort()));
-    // Setup time
-    setSyncProvider(getNtpTime);
-    setSyncInterval(SECS_PER_HOUR); // once a hour sync
-
-    // Start blynk
-    Blynk.config(blynk_token, blynk_server, blynk_port);
-    Serial.print("blynk server: ");
-    Serial.println(blynk_server);
-    Serial.print("port: ");
-    Serial.println(blynk_port);
-    Serial.print("token: ");
-    Serial.println(blynk_token);
-
-    drawBoot("Connect to Blynk");
-    connectBlynk();
-    timer.setInterval(30000L, sendMeasurements);// Setup a function to be called every n second
   }
+
+  aping.on(true, [](const AsyncPingResponse & response) {
+    IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+    if (response.answer)
+      Serial.printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%d ms\n", response.size, addr.toString().c_str(), response.icmp_seq, response.ttl, response.time);
+    else
+      Serial.printf("no answer yet for %s icmp_seq=%d\n", addr.toString().c_str(), response.icmp_seq);
+    return false; //do not stop
+  });
+
+  aping.on(false, [](const AsyncPingResponse & response) {
+    IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+    Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", addr.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
+    if (response.total_recv > 0)
+      connectedInetFlag = true;
+    else
+      connectedInetFlag = false;
+    if (response.mac)
+      Serial.printf("detected eth address " MACSTR "\n", MAC2STR(response.mac->addr));
+    return true;
+  });
+  asyncPing();
+
+  //set NTP time
+  Udp.begin(localPort);
+  Serial.print("Local port: ");
+  Serial.println(String(Udp.localPort()));
+  // Setup time
+  setSyncProvider(getNtpTime);
+  for (byte i = 0; i < 2; i++) { //trying to sync 3 times
+    if (timeStatus() == timeSet) {
+      Serial.print("Time status: ");
+      Serial.println(timeStatus());
+      break;
+    }
+    Serial.println("Trying to sync");
+    setTime(getNtpTime());
+  }
+
+  // Start blynk
+  Blynk.config(blynk_token, blynk_server, blynk_port);
+  Serial.print("blynk server: ");
+  Serial.println(blynk_server);
+  Serial.print("port: ");
+  Serial.println(blynk_port);
+  Serial.print("token: ");
+  Serial.println(blynk_token);
+
+  drawBoot("Connect to Blynk");
+  connectBlynk();
+
+  setSyncInterval(SECS_PER_HOUR); // NTP time sync interval
+  //  setSyncInterval(SECS_PER_DAY); // NTP time sync interval
+  timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr); //fill Pressure array
+  timer.setInterval(10000L, readMeasurements);
+  timer.setInterval(30000L, sendMeasurements);
+  timer.setInterval(56000L, asyncPing); //pinger
+}
+
+uint16_t getButton(uint16_t input) {
+  if (input < 400)
+    for (int k = 0; k < NUM_KEYS; k++)
+      if (input < adc_key_val[k]) {
+        Serial.print("button ");
+        Serial.print(k + 1);
+        Serial.println(" is pressed");
+        return k + 1;
+      }
+  return 0;
 }
 
 void loop() {
   timer.run();
+  
   drawMainScreen();
 
-  Serial.println(analogRead(A0));
+  adc_data = analogRead(A0);
+  getButton(adc_data);
 
-  if (Blynk.connected()) {
+  if (connectedInetFlag && Blynk.connected()) 
     Blynk.run();
-  }
 
   //  hwReset.update();
   //  if (hwReset.fell()) {
   //    factoryReset();
   //  }
 }
+

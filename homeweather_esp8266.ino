@@ -10,10 +10,9 @@
 #include <ESP8266HTTPClient.h> // HTTP requests
 #include <WiFiUdp.h> //for NTP
 #include <AsyncPing.h> //async pinger
-#include <TimeLib.h>
+#include <TimeLib.h> //timekeeping
 #include <ESP8266httpUpdate.h> // OTA updates
 #include <BlynkSimpleEsp8266.h> // Blynk
-// #include <Bounce2.h> // Debounce https://github.com/thomasfredericks/Bounce2
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 #include <SimpleTimer.h> // Handy timers
 #include <Adafruit_Sensor.h>
@@ -23,23 +22,18 @@
 //Preferences
 #define PING_SERV 8.8.8.8
 IPAddress addrs[3];
-#define WIFI_TIMEOUT 180
+#define WIFI_TIMEOUT 10
 #define SSID "YourHomeWeather" // Network credentials
 //String pass {"YHWBopka"}; // Wi-Fi AP password
 // GPIO Defines
 #define I2C_SDA 5 // D1, SDA pin, GPIO5 for BME280
 #define I2C_SCL 4 // D2, SCL pin, GPIO4 for BME280
 #define PWM_PIN 0 //D3, GPIO0, for ST7920
-#define SCLK_PIN 12 // D6, E pin, GPIO12, for ST7920
-#define RW_PIN 13 // D7, R/W pin, GPIO13, for ST7920
-#define RS_PIN 15 // D8, RS pin, GPIO15, for ST7920
+#define SCLK_PIN 12 // D6, E pin, GPIO12, for ST7920 acts like CLK (clock) input pin
+#define RW_PIN 13 // D7, R/W pin, GPIO13, for ST7920 acts like DATA pin
+#define RS_PIN 15 // D8, RS pin, GPIO15, for ST7920 acts like CS (Chip Select) pin
 #define TX_PIN 2 //D4, RX pin, GPIO2, for mz-h19
 #define RX_PIN 14 //D5, TX pin, GPIO14, for mz-h19
-
-//#define HW_RESET 12 //TODO
-// Debounce interval in ms
-//#define DEBOUNCE_INTERVAL 10
-//Bounce hwReset {Bounce()};
 
 //display ST7920
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0,/*display-clock E,SCLK;esp-GPIO12,D6*/SCLK_PIN,/*display-data R/W;esp-GPIO13,D7*/RW_PIN,/*display-RS;esp-GPIO15,D8*/RS_PIN);
@@ -209,7 +203,7 @@ void drawMainScreen() {
   u8g2.drawXBMP(60, 36, 14, 12, p_bitmap);
 
   if (delta > 2) {
-    u8g2.drawGlyph(76, 47, 30); //big arrow up (28-29) small arrow up/down (30-31) arrow up/down
+    u8g2.drawGlyph(76, 47, 30); //big arrow up
   }
   else if (delta > 1) {
     u8g2.drawGlyph(76, 47, 28); //small arrow up
@@ -218,7 +212,7 @@ void drawMainScreen() {
     u8g2.drawGlyph(76, 47, 31); //big arrow down
   }
   else if (delta < -1) {
-    u8g2.drawGlyph(76, 47, 29); //big arrow down
+    u8g2.drawGlyph(76, 47, 29); //small arrow down
   }
 
   //  u8g2.drawGlyph(76, 47, 29); //arrow up   (28-29) small arrow up/down (30-31) arrow up/down
@@ -596,12 +590,14 @@ BLYNK_WRITE(V25) {
 
 void setup() {
   analogWrite(PWM_PIN, 64); //set backlight
+  // Init display
+//  u8g2.begin();
+    u8g2.begin(U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE);
+  drawBoot("loading...");
+
   Serial.begin(115200); //debug sensor serial port
   swSer.begin(9600); // init CO2 sensor serial port
   Wire.begin(I2C_SDA, I2C_SCL);  // init I2C interface
-  // Init display
-  u8g2.begin();
-  drawBoot("loading...");
 
   if (!bme.begin(0x76)) { // init Pressure/Temperature sensor
     Serial.println("Could not find a valid BME280 sensor, check wiring!");
@@ -625,7 +621,7 @@ void setup() {
       Serial.println("Config loaded");
     }
   }
-
+  drawBoot("connecting...");
   aping.on(true, [](const AsyncPingResponse & response) {
     IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
     if (response.answer)
@@ -673,7 +669,6 @@ void setup() {
   Serial.print("token: ");
   Serial.println(blynk_token);
 
-  drawBoot("Connect to Blynk");
   connectBlynk();
 
   setSyncInterval(SECS_PER_HOUR); // NTP time sync interval
@@ -684,28 +679,50 @@ void setup() {
   timer.setInterval(56000L, asyncPing); //pinger
 }
 
-uint16_t getButton(uint16_t input) {
-  if (input < 400)
-    for (int k = 0; k < NUM_KEYS; k++)
-      if (input < adc_key_val[k]) {
-        Serial.print("button ");
-        Serial.print(k + 1);
-        Serial.println(" is pressed");
-        return k + 1;
-      }
-  return 0;
+void buttonPress() {
+  if (adc_data < 400) {
+    if (adc_data < adc_key_val[0])
+      buttonOne();
+    else if (adc_data < adc_key_val[1])
+      buttonTwo();
+    else if (adc_data < adc_key_val[2])
+      buttonThree();
+  }
+}
+
+void buttonOne() {
+  Serial.println("button one is pressed!");
+}
+
+void buttonTwo() {
+  Serial.println("button two is pressed!");
+}
+
+void buttonThree() {
+  Serial.println("button three is pressed!");
+//  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_7x13_mf);
+
+  //    u8g2.userInterfaceSelectionList("Main menu", 3, "Time set\nDate set\nBacklight set\nExit");
+  u8g2.userInterfaceSelectionList("Mainmenu", 0, "Timeset");
+//    Serial.println(adc_data);
+//  u8g2.sendBuffer();
+  //  if (++light_mode >= 6) light_mode = 0;
+  //  analogWrite(PWM_PIN, pwm_light[light_mode]);
 }
 
 void loop() {
   timer.run();
-  
+
   drawMainScreen();
+  //  buttonThree();
 
   adc_data = analogRead(A0);
-  getButton(adc_data);
-
-  if (connectedInetFlag && Blynk.connected()) 
+  buttonPress();
+  
+  if (connectedInetFlag && Blynk.connected())
     Blynk.run();
+
 
   //  hwReset.update();
   //  if (hwReset.fell()) {

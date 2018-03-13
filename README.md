@@ -19,4 +19,3 @@ TX - D5
 SDA - D1
 SCL - D2
 VCC - 3V3
-

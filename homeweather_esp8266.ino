@@ -57,19 +57,22 @@ SimpleTimer timer;
 WiFiManager wifiManager;
 
 // Sensors data
-int t { -100};
-int p { -1};
-int h { -1};
+int16_t t { -100};
+int16_t p { -1};
+int16_t h { -1};
 int co2 { 0};
 float tf {0};
 float pf {0};
 float hf {0};
 uint16_t light;
 uint16_t adc_data;
-#define NUM_KEYS 3
-int  adc_key_val[NUM_KEYS] = {100, 200, 360};
 
-// Math data for pressure calculating see http://bit.ly/1EXW1I9 http://bit.ly/1DIbvyj
+#define NUM_KEYS 3
+int adc_key_val[NUM_KEYS] = {100, 200, 360};
+uint32_t lastDebounceTime = 0;
+uint16_t debounceTime = 350;
+
+// Math data for pressure calculating, see http://bit.ly/1EXW1I9 http://bit.ly/1DIbvyj
 #define P_LEN 4
 float p_array[P_LEN];
 float delta;
@@ -80,9 +83,24 @@ bool cloudSyncFlag = false;
 bool shouldSaveConfig = false; //flag for saving data
 bool connectedWiFiFlag = false; //flag if connected Wi-Fi
 
-long wifiRSSI = 0;
+//menu
+bool timeSetFlag = false;
+bool timeSetMinFlag = false;
+bool timeSetHourFlag = false;
+bool timeSetDayFlag = false;
+bool timeSetMonthFlag = false;
+bool timeSetYearFlag = false;
+bool backlightSetFlag = false;
+bool menuFlag = false;
+int8_t curMenuItem = 0;
+int8_t menuItemsCount = 4;
+
+int8_t hourParam = 0;
+int8_t minParam = 0;
 
 char dots {':'};
+
+long wifiRSSI = 0;
 
 const uint16_t pwm_light[6] = {0, 64, 96, 128, 192, 256};
 uint8_t light_mode {0};
@@ -165,9 +183,25 @@ void drawMainScreen() {
   u8g2.clearBuffer();
   //draw time
   u8g2.setFont(custom_font30);
-  u8g2.drawStr(15, 30 , String(printDigits(hour()) + dots + printDigits(minute())).c_str());
-  //update dots
-  ((millis() / 1000) % 2) == 0 ? dots = ':' : dots = ' ';
+  
+  if (timeSetFlag) {
+    if (timeSetDayFlag || timeSetMonthFlag || timeSetYearFlag ) {
+      u8g2.setFont(custom_font_14);
+      u8g2.drawStr(42, 14 , printDigits(day(), timeSetDayFlag).c_str());
+      u8g2.drawStr(66, 14 , printDigits(month(), timeSetMonthFlag).c_str());
+      u8g2.drawStr(40, 30 , printDigits(year(), timeSetYearFlag).c_str());
+      u8g2.setFont(custom_font30);
+    }
+    else {
+      dots = ':';
+      u8g2.drawStr(15, 30 , String(printDigits(hourParam, timeSetHourFlag) + dots + printDigits(minParam, timeSetMinFlag)).c_str());
+    }
+  }
+  else {
+    u8g2.drawStr(15, 30 , String(printDigits(hour(), timeSetHourFlag) + dots + printDigits(minute(), timeSetMinFlag)).c_str());
+    ((millis() / 1000) % 2) == 0 ? dots = ':' : dots = ' '; //update dots
+  }
+    
 
   if (connectedWiFiFlag) {
     drawSignalQuality(0, 0);
@@ -183,10 +217,8 @@ void drawMainScreen() {
   u8g2.drawStr(107, 28, weekdayRus(weekday()).c_str());
 
   u8g2.setFont(custom_font_14);
-  u8g2.drawStr(108, 14 , printDigits(day()).c_str());
+  u8g2.drawStr(108, 14 , printDigits(day(),false).c_str());
 
-  //  t = 23; tf = 8.0; h = 55; hf = 85.0;  p = 740; pf = 740.0;
-  //    co2 = 3526;
   //CO2
   String co2String = String(co2);
   u8g2.drawXBMP(60, 52, 15, 12, co_bitmap);
@@ -230,13 +262,70 @@ void drawMainScreen() {
   u8g2.sendBuffer();
 }
 
-// utility for digital clock display: prints preceding colon and leading 0
-String printDigits(int digits) {
-  String formattedstr = "";
-  if (digits < 10) {
-    formattedstr = + "0";
+const char *GetStringLine(uint8_t line_idx, const char *str ) { //Assumes strings, separated by '\n' in "str". Returns the string at index "line_idx". First strng has line_idx = 0
+  char e;
+  uint8_t line_cnt = 1;
+
+  if ( line_idx == 0 )
+    return str;
+
+  for (;;)
+  {
+    e = *str;
+    if ( e == '\0' )
+      break;
+    str++;
+    if ( e == '\n' )
+    {
+      if ( line_cnt == line_idx )
+        return str;
+      line_cnt++;
+    }
   }
-  formattedstr = formattedstr + String(digits);
+  return NULL;  /* line not found */
+}
+
+void drawMenu(const char *title, uint8_t start_pos, const char *line) {
+  u8g2.clearBuffer();
+  byte x {0}; byte y {0};
+
+  u8g2.setFont(u8g2_font_7x13_mf);
+
+  x = (128 - u8g2.getStrWidth(title)) / 2;
+  y = u8g2.getAscent() - u8g2.getDescent() - 2;
+  u8g2.drawStr(x, y, title);
+  y++;
+  u8g2.drawHLine(0, y, 127);
+
+  for (byte  i = 0; i < menuItemsCount; i++) {
+    const char *msg = GetStringLine(i, line);
+    if (i == start_pos) {
+      u8g2.drawBox(0, y + 2, 127, u8g2.getAscent() - u8g2.getDescent() + 2);
+      u8g2.setDrawColor(0);
+    }
+    else
+      u8g2.setDrawColor(1);
+    x = (128 - u8g2.getStrWidth(msg)) / 2;
+    y = y + 2 + u8g2.getAscent() - u8g2.getDescent();
+    u8g2.drawStr(x, y, msg);
+  }
+  u8g2.setDrawColor(1);
+  u8g2.sendBuffer();
+}
+
+String printDigits(uint16_t digits, uint8_t blinking) { //prints preceding colon and leading 0, blinking
+  String formattedstr(digits);
+  if (blinking) {
+    if ((millis() / 500 % 2) == 0) {
+      if (digits < 10)
+        formattedstr = "0" + String(digits);
+    }
+    else
+      formattedstr = "      ";
+  }
+  else if (digits < 10)
+    formattedstr = "0" + String(digits);
+
   return formattedstr;
 }
 
@@ -261,7 +350,7 @@ String weekdayRus(byte weekday) {
   }
 }
 
-void drawBoot(String msg) {
+void drawBoot(String msg = "loading...") {
   u8g2.clearBuffer();
   u8g2.setFont(u8g2_font_9x18_mf);
   byte x {0}; byte y {0};
@@ -590,10 +679,8 @@ BLYNK_WRITE(V25) {
 
 void setup() {
   analogWrite(PWM_PIN, 64); //set backlight
-  // Init display
-//  u8g2.begin();
-    u8g2.begin(U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE, U8X8_PIN_NONE);
-  drawBoot("loading...");
+  u8g2.begin();// init display
+  drawBoot();
 
   Serial.begin(115200); //debug sensor serial port
   swSer.begin(9600); // init CO2 sensor serial port
@@ -621,7 +708,7 @@ void setup() {
       Serial.println("Config loaded");
     }
   }
-  drawBoot("connecting...");
+ drawBoot();
   aping.on(true, [](const AsyncPingResponse & response) {
     IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
     if (response.answer)
@@ -644,13 +731,13 @@ void setup() {
   });
   asyncPing();
 
-  //set NTP time
+  // Setup time
   Udp.begin(localPort);
   Serial.print("Local port: ");
   Serial.println(String(Udp.localPort()));
-  // Setup time
+  
   setSyncProvider(getNtpTime);
-  for (byte i = 0; i < 2; i++) { //trying to sync 3 times
+  for (byte i = 0; i <= 2; i++) { //trying to sync 3 times
     if (timeStatus() == timeSet) {
       Serial.print("Time status: ");
       Serial.println(timeStatus());
@@ -681,52 +768,146 @@ void setup() {
 
 void buttonPress() {
   if (adc_data < 400) {
-    if (adc_data < adc_key_val[0])
-      buttonOne();
-    else if (adc_data < adc_key_val[1])
-      buttonTwo();
-    else if (adc_data < adc_key_val[2])
-      buttonThree();
+    if (adc_data < adc_key_val[0]) {
+      if ((millis() - lastDebounceTime) > debounceTime) {
+        lastDebounceTime = millis();
+        buttonOne();
+      }
+    }
+    else if (adc_data < adc_key_val[1]) {
+      if ((millis() - lastDebounceTime) > debounceTime) {
+        lastDebounceTime = millis();
+        buttonTwo();
+      }
+    }
+    else if (adc_data < adc_key_val[2]) {
+      if ((millis() - lastDebounceTime) > debounceTime) {
+        lastDebounceTime = millis();
+        buttonThree();
+      }
+    }
   }
 }
 
 void buttonOne() {
   Serial.println("button one is pressed!");
+  if (menuFlag)
+    if (++curMenuItem > menuItemsCount - 1) curMenuItem = 0;
+  if (timeSetMinFlag) {
+    minParam--;
+    if (minParam<0)
+      minParam =59;
+  }
+  if (timeSetHourFlag){
+    hourParam--;  
+     if (hourParam<0)
+      hourParam = 23; 
+  }
+if (timeSetDayFlag)   
+    setTime(hour(),minute(),second(),day()-1,month(),year()); 
+  if (timeSetMonthFlag)   
+    setTime(hour(),minute(),second(),day(),month()-1,year());
+  if (timeSetYearFlag)   
+    setTime(hour(),minute(),second(),day(),month(),year()-1);
 }
 
 void buttonTwo() {
   Serial.println("button two is pressed!");
+  Serial.println(menuFlag);
+  Serial.println(timeSetMinFlag);
+  if (menuFlag)
+    if (--curMenuItem < 0) curMenuItem = menuItemsCount - 1;
+  if (timeSetMinFlag) {  
+    minParam++;
+    if (minParam>59)
+      minParam =0;
+    }
+  if (timeSetHourFlag){   
+    hourParam++;
+    if (hourParam>23)
+      hourParam = 0; 
+    }
+  if (timeSetDayFlag)   
+    setTime(hour(),minute(),second(),day()+1,month(),year()); 
+  if (timeSetMonthFlag)   
+    setTime(hour(),minute(),second(),day(),month()+1,year());
+  if (timeSetYearFlag)   
+    setTime(hour(),minute(),second(),day(),month(),year()+1);
 }
 
 void buttonThree() {
   Serial.println("button three is pressed!");
-//  u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_7x13_mf);
+  if (!menuFlag && !timeSetFlag && !backlightSetFlag)
+    menuFlag = true;
+  else if (menuFlag) {  //main menu
+    switch (curMenuItem) {
+      case 0:           //go to time set, minute set
+        if (year()<2018) setTime(hour(),minute(),second(),day(),month(),2018); //set year of last firmware
+        timeSetFlag = true;
+        timeSetMinFlag = true;
+        menuFlag = false;
+        hourParam = hour();
+        minParam = minute();
+        break;
+      case 1:
+        //        setDate();
+        menuFlag = false;
+        break;
+      case 2:
+        //        SetBacklight();
+        menuFlag = false;
+        break;
+      case 3:
+        menuFlag = false; //exit from menu
+        break;
+    }
+    curMenuItem = 0;
+  }
+  else if (timeSetFlag) {
+    if (timeSetYearFlag) { //end time set
+      timeSetMinFlag = false;
+      timeSetHourFlag = false;
+      timeSetDayFlag = false;
+      timeSetMonthFlag = false;
+      timeSetYearFlag = false;
+      timeSetFlag = false;
+      setTime(hourParam,minParam,0,day(),month(),year());
+      // setTime(hour(),minute(),0,day(),month(),year());
+    }
+    else if (timeSetMinFlag) { //go to hour set
+     timeSetMinFlag = false;
+     timeSetHourFlag = true;
+    }
+    else if (timeSetHourFlag) { //go to day set
+      timeSetHourFlag = false;
+      timeSetDayFlag = true;
+      }
+    else if (timeSetDayFlag) { //go to month set
+      timeSetDayFlag = false;
+      timeSetMonthFlag = true;  
+    }
+    else if (timeSetMonthFlag) { //go to year set
+      timeSetMonthFlag = false;
+      timeSetYearFlag = true;  
+    }
+  }
+  else if (backlightSetFlag) {
 
-  //    u8g2.userInterfaceSelectionList("Main menu", 3, "Time set\nDate set\nBacklight set\nExit");
-  u8g2.userInterfaceSelectionList("Mainmenu", 0, "Timeset");
-//    Serial.println(adc_data);
-//  u8g2.sendBuffer();
-  //  if (++light_mode >= 6) light_mode = 0;
-  //  analogWrite(PWM_PIN, pwm_light[light_mode]);
+  }
 }
 
 void loop() {
   timer.run();
 
-  drawMainScreen();
-  //  buttonThree();
+  if (menuFlag)
+    drawMenu("MAIN MENU", curMenuItem, "Time set\nDate set\nBacklight set\nExit");
+  else
+    drawMainScreen();
 
   adc_data = analogRead(A0);
   buttonPress();
-  
+
   if (connectedInetFlag && Blynk.connected())
     Blynk.run();
-
-
-  //  hwReset.update();
-  //  if (hwReset.fell()) {
-  //    factoryReset();
-  //  }
 }
 

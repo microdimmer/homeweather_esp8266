@@ -37,13 +37,11 @@ IPAddress addrs[3];
 
 //display ST7920
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0,/*display-clock E,SCLK;esp-GPIO12,D6*/SCLK_PIN,/*display-data R/W;esp-GPIO13,D7*/RW_PIN,/*display-RS;esp-GPIO15,D8*/RS_PIN);
-
 // Humidity/Temperature/Pressure/CO2
 Adafruit_BME280 bme;
 SoftwareSerial swSer(RX_PIN, TX_PIN, false, 256);// CO2 SERIAL
 byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
 unsigned char response[7];
-
 // Blynk token
 char blynk_token[33] {"7ca0a9293079453499aa5453883510cf"};
 char blynk_server[64] {"blynk-cloud.com"};
@@ -93,12 +91,7 @@ bool timeSetYearFlag = false;
 bool backlightSetFlag = false;
 bool menuFlag = false;
 int8_t curMenuItem = 0;
-int8_t menuItemsCount = 4;
-
-int8_t hourParam = 0;
-int8_t minParam = 0;
-
-char dots {':'};
+int8_t menuItemsCount = 3;
 
 long wifiRSSI = 0;
 
@@ -114,8 +107,9 @@ const int timeZone = 5;         // GMT +5
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
-
+String timestring = "";
 #include "graphics.h"
+
 
 time_t getNtpTime() {
   //  if (connectedInetFlag) {
@@ -151,7 +145,6 @@ void sendNTPpacket(IPAddress &address) { // send an NTP request to the time serv
   // set all bytes in the buffer to 0
   memset(packetBuffer, 0, NTP_PACKET_SIZE);
   // Initialize values needed to form NTP request
-  // (see URL above for details on the packets)
   packetBuffer[0] = 0b11100011;   // LI, Version, Mode
   packetBuffer[1] = 0;     // Stratum, or type of clock
   packetBuffer[2] = 6;     // Polling Interval
@@ -179,29 +172,107 @@ void syncTime() {
     Serial.println("Time is synced");
 }
 
+String weekdayRus(byte weekday) {
+  switch (weekday) {
+    case 2:
+      return "PON";
+    case 3:
+      return "VTR";
+    case 4:
+      return "SRD";
+    case 5:
+      return "CTV";
+    case 6:
+      return "PTN";
+    case 7:
+      return "SYB";
+    case 1:
+      return "VSK";
+  }
+  return "0";
+}
+
+void drawSignalQuality(uint8_t x, uint8_t y) {
+  if (!connectedInetFlag) {
+    u8g2.drawLine(x, y, x + 2, y + 2);
+    u8g2.drawLine(x, y + 2, x + 2, y);
+  }
+  else {
+    u8g2.drawLine(x, y + 2, x + 2, y);
+    u8g2.drawLine(x, y, x, y + 2);
+  }
+  y = y + 6;
+  if (wifiRSSI >= -90)
+    u8g2.drawFrame(x, y, x + 2, y - 4);
+  if (wifiRSSI >= -80)
+    u8g2.drawFrame(x + 3, y - 2, x + 2, y - 2);
+  if (wifiRSSI >= -70)
+    u8g2.drawFrame(x + 6, y - 4, x + 2, y);
+  if (wifiRSSI >= -65)
+    u8g2.drawFrame(x + 9, y - 6, x + 2, y + 2);
+}
+
+const char *GetStringLine(uint8_t line_idx, const char *str ) { //Assumes strings, separated by '\n' in "str". Returns the string at index "line_idx". First strng has line_idx = 0
+  char e;
+  uint8_t line_cnt = 1;
+
+  if ( line_idx == 0 )
+    return str;
+
+  for (;;)
+  {
+    e = *str;
+    if ( e == '\0' )
+      break;
+    str++;
+    if ( e == '\n' )
+    {
+      if ( line_cnt == line_idx )
+        return str;
+      line_cnt++;
+    }
+  }
+  return NULL;  /* line not found */
+}
+
+const char* printDigits(uint16_t digits, bool blinking = false) { //prints preceding colon and leading 0, blinking
+  timestring = digits;
+  if (blinking) {
+    if ((millis() / 500 % 2) == 0) {
+      if (digits < 10)
+        timestring = "0" + String(digits);
+    }
+    else
+      timestring = "      ";
+  }
+  else if (digits < 10)
+    timestring = "0" + String(digits);
+
+    return timestring.c_str();
+}
+
 void drawMainScreen() {
   u8g2.clearBuffer();
   //draw time
   u8g2.setFont(custom_font30);
-  
+
   if (timeSetFlag) {
-    if (timeSetDayFlag || timeSetMonthFlag || timeSetYearFlag ) {
-      u8g2.setFont(custom_font_14);
-      u8g2.drawStr(42, 14 , printDigits(day(), timeSetDayFlag).c_str());
-      u8g2.drawStr(66, 14 , printDigits(month(), timeSetMonthFlag).c_str());
-      u8g2.drawStr(40, 30 , printDigits(year(), timeSetYearFlag).c_str());
-      u8g2.setFont(custom_font30);
-    }
-    else {
-      dots = ':';
-      u8g2.drawStr(15, 30 , String(printDigits(hourParam, timeSetHourFlag) + dots + printDigits(minParam, timeSetMinFlag)).c_str());
-    }
+    u8g2.setFont(custom_font_14);
+    u8g2.drawStr(40, 14, printDigits(hour(), timeSetHourFlag));
+    u8g2.drawStr(60, 14, ":");
+    u8g2.drawStr(65, 14, printDigits(minute(), timeSetMinFlag));
+    u8g2.drawStr(15, 30, printDigits(day(), timeSetDayFlag));
+    u8g2.drawStr(35, 30, ".");
+    u8g2.drawStr(39, 30, printDigits(month(), timeSetMonthFlag));
+    u8g2.drawStr(59, 30, ".");
+    u8g2.drawStr(64, 30, printDigits(year(), timeSetYearFlag));
+    u8g2.setFont(custom_font30);
   }
   else {
-    u8g2.drawStr(15, 30 , String(printDigits(hour(), timeSetHourFlag) + dots + printDigits(minute(), timeSetMinFlag)).c_str());
-    ((millis() / 1000) % 2) == 0 ? dots = ':' : dots = ' '; //update dots
+    u8g2.drawStr(15, 30 , printDigits(hour()));
+    if ((millis() / 1000) % 2) u8g2.drawStr(57, 30 , ":");
+    u8g2.drawStr(64, 30 , printDigits(minute()));
   }
-    
 
   if (connectedWiFiFlag) {
     drawSignalQuality(0, 0);
@@ -217,7 +288,7 @@ void drawMainScreen() {
   u8g2.drawStr(107, 28, weekdayRus(weekday()).c_str());
 
   u8g2.setFont(custom_font_14);
-  u8g2.drawStr(108, 14 , printDigits(day(),false).c_str());
+  u8g2.drawStr(108, 14 , printDigits(day()));
 
   //CO2
   String co2String = String(co2);
@@ -247,42 +318,18 @@ void drawMainScreen() {
     u8g2.drawGlyph(76, 47, 29); //small arrow down
   }
 
-  //  u8g2.drawGlyph(76, 47, 29); //arrow up   (28-29) small arrow up/down (30-31) arrow up/down
   u8g2.drawStr(87, 47, String(p).c_str());
 
   u8g2.setFont(custom_font7);
   u8g2.drawGlyph(48, 64, 0xb0); //degree sign
-  u8g2.drawStr(51, 64, String("C").c_str());
+  u8g2.drawStr(51, 64, "C");
   u8g2.drawGlyph(49, 48, 0x25); //percent
-  u8g2.drawStr(117, 64 , String("y.e.").c_str());
-  u8g2.drawStr(117, 37 , String("mm").c_str());
-  u8g2.drawStr(117, 42 , String("pt.").c_str());
-  u8g2.drawStr(117, 47 , String("ct.").c_str());
+  u8g2.drawStr(117, 64 , "y.e.");
+  u8g2.drawStr(117, 37 , "mm");
+  u8g2.drawStr(117, 42 , "pt.");
+  u8g2.drawStr(117, 47 , "ct.");
 
   u8g2.sendBuffer();
-}
-
-const char *GetStringLine(uint8_t line_idx, const char *str ) { //Assumes strings, separated by '\n' in "str". Returns the string at index "line_idx". First strng has line_idx = 0
-  char e;
-  uint8_t line_cnt = 1;
-
-  if ( line_idx == 0 )
-    return str;
-
-  for (;;)
-  {
-    e = *str;
-    if ( e == '\0' )
-      break;
-    str++;
-    if ( e == '\n' )
-    {
-      if ( line_cnt == line_idx )
-        return str;
-      line_cnt++;
-    }
-  }
-  return NULL;  /* line not found */
 }
 
 void drawMenu(const char *title, uint8_t start_pos, const char *line) {
@@ -313,72 +360,14 @@ void drawMenu(const char *title, uint8_t start_pos, const char *line) {
   u8g2.sendBuffer();
 }
 
-String printDigits(uint16_t digits, uint8_t blinking) { //prints preceding colon and leading 0, blinking
-  String formattedstr(digits);
-  if (blinking) {
-    if ((millis() / 500 % 2) == 0) {
-      if (digits < 10)
-        formattedstr = "0" + String(digits);
-    }
-    else
-      formattedstr = "      ";
-  }
-  else if (digits < 10)
-    formattedstr = "0" + String(digits);
-
-  return formattedstr;
-}
-
-String weekdayRus(byte weekday) {
-  switch (weekday) {
-    case 2:
-      return "PON";
-    case 3:
-      return "VTR";
-    case 4:
-      return "SRD";
-    case 5:
-      return "CTV";
-    case 6:
-      return "PTN";
-    case 7:
-      return "SYB";
-    case 0:
-      return "VSK";
-    default:
-      return "0";
-  }
-}
-
 void drawBoot(String msg = "loading...") {
   u8g2.clearBuffer();
-  u8g2.setFont(u8g2_font_9x18_mf);
+  u8g2.setFont(u8g2_font_7x13_mf);
   byte x {0}; byte y {0};
   x = (128 - u8g2.getStrWidth(msg.c_str())) / 2;
   y = 32 + u8g2.getAscent() / 2;
   u8g2.drawStr(x, y, msg.c_str());
   u8g2.sendBuffer();
-}
-
-void drawSignalQuality(uint8_t x, uint8_t y) {
-  if (!connectedInetFlag) {
-    u8g2.drawLine(x, y, x + 2, y + 2);
-    u8g2.drawLine(x, y + 2, x + 2, y);
-  }
-  else {
-    u8g2.drawLine(x, y + 2, x + 2, y);
-    u8g2.drawLine(x, y, x, y + 2);
-  }
-  y = y + 6;
-  if (wifiRSSI >= -90)
-    u8g2.drawFrame(x, y, x + 2, y - 4);
-  if (wifiRSSI >= -80)
-    u8g2.drawFrame(x + 3, y - 2, x + 2, y - 2);
-  if (wifiRSSI >= -70)
-    u8g2.drawFrame(x + 6, y - 4, x + 2, y);
-  if (wifiRSSI >= -65)
-    u8g2.drawFrame(x + 9, y - 6, x + 2, y + 2);
-
 }
 
 void drawConnectionDetails(String ssid, String mins, String url) {
@@ -406,7 +395,6 @@ void drawConnectionDetails(String ssid, String mins, String url) {
   y = y + 1 + u8g2.getAscent() - u8g2.getDescent();
   u8g2.drawStr(x, y, msg.c_str());
 
-  // URL
   x = (128 - u8g2.getStrWidth(url.c_str())) / 2;
   y = y + 1 + u8g2.getAscent() - u8g2.getDescent();
   u8g2.drawStr(x, y, url.c_str());
@@ -414,8 +402,7 @@ void drawConnectionDetails(String ssid, String mins, String url) {
   u8g2.sendBuffer();
 }
 
-//callback notifying when need to save config
-void saveConfigCallback() {
+void saveConfigCallback() { //callback notifying when need to save config
   Serial.println("Should save config");
   shouldSaveConfig = true;
 }
@@ -444,7 +431,7 @@ void readCO2() {
     swSer.readBytes(response, 7);
 
     byte crc = 0x86;
-    for (char i = 0; i < 6; i++) {
+    for (byte i = 0; i < 6; i++) {
       crc += response[i];
     }
     crc = 0xff - crc;
@@ -486,13 +473,13 @@ void readMeasurements() {
 }
 
 void read_p_arr() {
-  for (byte i = 0; i < P_LEN - 1; i++) {
+  for (uint8_t i = 0; i < P_LEN - 1; i++) {
     p_array[i] = p_array[i + 1];
   }
   p_array[P_LEN - 1] = bme.readPressure() * 760.0 / 101325;
 
   float sumX = 0, sumY = 0, sumX2 = 0, sumXY = 0;
-  for (int i = 0; i < P_LEN; i++) {
+  for (uint8_t i = 0; i < P_LEN; i++) {
     sumX += i + 1;
     sumY += p_array[i];
     sumX2 += (i + 1) * (i + 1);
@@ -508,7 +495,7 @@ void read_p_arr() {
   Blynk.virtualWrite(V5, p);
 }
 
-void sendMeasurements() {   // Send to server
+void sendMeasurements() {   // send to server
   if (connectedInetFlag) {
     if (timeStatus() == timeNotSet)
       syncTime();
@@ -534,7 +521,7 @@ void sendMeasurements() {   // Send to server
 
 bool connectBlynk() {
   if (!Blynk.connected()) {
-    Serial.println("Blync is not connectd, trying to connect...");
+    Serial.println("Blynk is not connectd, trying to connect...");
     if (!Blynk.connect()) {
       Serial.println("Failed to connect blynk...");
       return false;
@@ -585,6 +572,7 @@ bool loadConfig() {
   strcpy(device_id, json["device_id"]);
   strcpy(blynk_server, json["blynk_server"]);
   strcpy(blynk_token, json["blynk_token"]);
+  return true;
 }
 
 bool setupWiFi() {
@@ -598,22 +586,17 @@ bool setupWiFi() {
   wifiManager.addParameter(&custom_blynk_server);
   wifiManager.addParameter(&custom_blynk_token);
   wifiManager.addParameter(&custom_device_id);
-
-  drawConnectionDetails(SSID, "3 mins", "http://192.168.4.1");
+  drawConnectionDetails(SSID, String(static_cast<int>(WIFI_TIMEOUT / 60)) + " mins", "http://192.168.4.1");
   wifiManager.setTimeout(WIFI_TIMEOUT);
-  //  wifiManager.setTimeout(1);
   //  wifiManager.setAPCallback(configModeCallback);
 
   if (!wifiManager.autoConnect(SSID)) {
     //  if (!wifiManager.autoConnect(ssid.c_str(), pass.c_str())) { \\ с паролем иногда не пускает, пока будем без
     Serial.println("failed to connect and hit timeout");
-    connectedWiFiFlag = false;
     return false;
   }
-  else connectedWiFiFlag = true;
 
-  //save the custom parameters to FS
-  if (shouldSaveConfig && connectedWiFiFlag) {
+  if (shouldSaveConfig) { //save the custom parameters to FS
     Serial.println("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject &json = jsonBuffer.createObject();
@@ -627,14 +610,12 @@ bool setupWiFi() {
     json.printTo(Serial);
     json.printTo(configFile);
     configFile.close();
-    //end save
-    return 1;
   }
 
-  //if you get here you have connected to the WiFi
-  Serial.println("WiFi connected");
+  Serial.println("WiFi connected"); //if you get here you have connected to the WiFi
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
+  return true;
 }
 
 // Virtual pin update FW
@@ -700,7 +681,8 @@ void setup() {
     p_array[i] = pf;
   }
 
-  if (setupWiFi()) {
+  connectedWiFiFlag = setupWiFi();
+  if (connectedWiFiFlag) {
     if (!loadConfig()) {
       Serial.println("Failed to load config");
       factoryReset();
@@ -708,7 +690,8 @@ void setup() {
       Serial.println("Config loaded");
     }
   }
- drawBoot();
+  drawBoot();
+
   aping.on(true, [](const AsyncPingResponse & response) {
     IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
     if (response.answer)
@@ -735,7 +718,7 @@ void setup() {
   Udp.begin(localPort);
   Serial.print("Local port: ");
   Serial.println(String(Udp.localPort()));
-  
+
   setSyncProvider(getNtpTime);
   for (byte i = 0; i <= 2; i++) { //trying to sync 3 times
     if (timeStatus() == timeSet) {
@@ -758,8 +741,7 @@ void setup() {
 
   connectBlynk();
 
-  setSyncInterval(SECS_PER_HOUR); // NTP time sync interval
-  //  setSyncInterval(SECS_PER_DAY); // NTP time sync interval
+  setSyncInterval(SECS_PER_DAY); // NTP time sync interval
   timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr); //fill Pressure array
   timer.setInterval(10000L, readMeasurements);
   timer.setInterval(30000L, sendMeasurements);
@@ -794,45 +776,55 @@ void buttonOne() {
   if (menuFlag)
     if (++curMenuItem > menuItemsCount - 1) curMenuItem = 0;
   if (timeSetMinFlag) {
-    minParam--;
-    if (minParam<0)
-      minParam =59;
+    if (minute() == 0)
+      setTime(hour(), 59, second(), day(), month(), year());
+    else
+      setTime(hour(), minute() - 1, second(), day(), month(), year());
   }
-  if (timeSetHourFlag){
-    hourParam--;  
-     if (hourParam<0)
-      hourParam = 23; 
+  if (timeSetHourFlag) {
+    if (hour() == 0)
+      setTime(23, minute(), second(), day(), month(), year());
+    else
+      setTime(hour() - 1, minute(), second(), day(), month(), year());
   }
-if (timeSetDayFlag)   
-    setTime(hour(),minute(),second(),day()-1,month(),year()); 
-  if (timeSetMonthFlag)   
-    setTime(hour(),minute(),second(),day(),month()-1,year());
-  if (timeSetYearFlag)   
-    setTime(hour(),minute(),second(),day(),month(),year()-1);
+  if (timeSetDayFlag)
+    setTime(hour(), minute(), second(), day() - 1, month(), year());
+  if (timeSetMonthFlag) {
+    if (month() == 1)
+      setTime(hour(), minute(), second(), day(), 12, year());
+    else
+      setTime(hour(), minute(), second(), day(), month() - 1, year());
+  }
+  if (timeSetYearFlag)
+    setTime(hour(), minute(), second(), day(), month(), year() - 1);
 }
 
 void buttonTwo() {
   Serial.println("button two is pressed!");
-  Serial.println(menuFlag);
-  Serial.println(timeSetMinFlag);
   if (menuFlag)
     if (--curMenuItem < 0) curMenuItem = menuItemsCount - 1;
-  if (timeSetMinFlag) {  
-    minParam++;
-    if (minParam>59)
-      minParam =0;
-    }
-  if (timeSetHourFlag){   
-    hourParam++;
-    if (hourParam>23)
-      hourParam = 0; 
-    }
-  if (timeSetDayFlag)   
-    setTime(hour(),minute(),second(),day()+1,month(),year()); 
-  if (timeSetMonthFlag)   
-    setTime(hour(),minute(),second(),day(),month()+1,year());
-  if (timeSetYearFlag)   
-    setTime(hour(),minute(),second(),day(),month(),year()+1);
+  if (timeSetMinFlag) {
+    if (minute() == 59)
+      setTime(hour(), 0, second(), day(), month(), year());
+    else
+      setTime(hour(), minute() + 1, second(), day(), month(), year());
+  }
+  if (timeSetHourFlag) {
+    if (hour() == 23)
+      setTime(0, minute(), second(), day(), month(), year());
+    else
+      setTime(hour() + 1, minute(), second(), day(), month(), year());
+  }
+  if (timeSetDayFlag)
+    setTime(hour(), minute(), second(), day() + 1, month(), year());
+  if (timeSetMonthFlag) {
+    if (month() == 12)
+      setTime(hour(), minute(), second(), day(), 1, year());
+    else
+      setTime(hour(), minute(), second(), day(), month() + 1, year());
+  }
+  if (timeSetYearFlag)
+    setTime(hour(), minute(), second(), day(), month(), year() + 1);
 }
 
 void buttonThree() {
@@ -842,22 +834,16 @@ void buttonThree() {
   else if (menuFlag) {  //main menu
     switch (curMenuItem) {
       case 0:           //go to time set, minute set
-        if (year()<2018) setTime(hour(),minute(),second(),day(),month(),2018); //set year of last firmware
+        if (year() < 2018) setTime(hour(), minute(), second(), day(), month(), 2018); //set year of last firmware
         timeSetFlag = true;
         timeSetMinFlag = true;
         menuFlag = false;
-        hourParam = hour();
-        minParam = minute();
         break;
       case 1:
-        //        setDate();
+        backlightSetFlag = true; //set backlight
         menuFlag = false;
         break;
       case 2:
-        //        SetBacklight();
-        menuFlag = false;
-        break;
-      case 3:
         menuFlag = false; //exit from menu
         break;
     }
@@ -865,30 +851,24 @@ void buttonThree() {
   }
   else if (timeSetFlag) {
     if (timeSetYearFlag) { //end time set
-      timeSetMinFlag = false;
-      timeSetHourFlag = false;
-      timeSetDayFlag = false;
-      timeSetMonthFlag = false;
-      timeSetYearFlag = false;
-      timeSetFlag = false;
-      setTime(hourParam,minParam,0,day(),month(),year());
-      // setTime(hour(),minute(),0,day(),month(),year());
+      timeSetMinFlag = timeSetHourFlag = timeSetDayFlag = timeSetMonthFlag = timeSetYearFlag = timeSetFlag = false;
+      setTime(hour(), minute(), 0, day(), month(), year()); //zero seconds
     }
     else if (timeSetMinFlag) { //go to hour set
-     timeSetMinFlag = false;
-     timeSetHourFlag = true;
+      timeSetMinFlag = false;
+      timeSetHourFlag = true;
     }
     else if (timeSetHourFlag) { //go to day set
       timeSetHourFlag = false;
       timeSetDayFlag = true;
-      }
+    }
     else if (timeSetDayFlag) { //go to month set
       timeSetDayFlag = false;
-      timeSetMonthFlag = true;  
+      timeSetMonthFlag = true;
     }
     else if (timeSetMonthFlag) { //go to year set
       timeSetMonthFlag = false;
-      timeSetYearFlag = true;  
+      timeSetYearFlag = true;
     }
   }
   else if (backlightSetFlag) {
@@ -900,7 +880,7 @@ void loop() {
   timer.run();
 
   if (menuFlag)
-    drawMenu("MAIN MENU", curMenuItem, "Time set\nDate set\nBacklight set\nExit");
+    drawMenu("MAIN MENU", curMenuItem, "Time set\nBacklight set\nExit");
   else
     drawMainScreen();
 

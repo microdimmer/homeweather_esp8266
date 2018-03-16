@@ -20,20 +20,19 @@
 #include <U8g2lib.h>
 
 //Preferences
-#define PING_SERV 8.8.8.8
-IPAddress addrs[3];
-#define WIFI_TIMEOUT 10
-#define SSID "YourHomeWeather" // Network credentials
+const uint16_t WIFI_TIMEOUT = 60;
+const int8_t TIMEZONE = 5;         // GMT +5
+const char * SSID = "YourHomeWeather"; // Network credentials
 //String pass {"YHWBopka"}; // Wi-Fi AP password
 // GPIO Defines
-#define I2C_SDA 5 // D1, SDA pin, GPIO5 for BME280
-#define I2C_SCL 4 // D2, SCL pin, GPIO4 for BME280
-#define PWM_PIN 0 //D3, GPIO0, for ST7920
-#define SCLK_PIN 12 // D6, E pin, GPIO12, for ST7920 acts like CLK (clock) input pin
-#define RW_PIN 13 // D7, R/W pin, GPIO13, for ST7920 acts like DATA pin
-#define RS_PIN 15 // D8, RS pin, GPIO15, for ST7920 acts like CS (Chip Select) pin
-#define TX_PIN 2 //D4, RX pin, GPIO2, for mz-h19
-#define RX_PIN 14 //D5, TX pin, GPIO14, for mz-h19
+const uint8_t I2C_SDA = 5; // D1, SDA pin, GPIO5 for BME280
+const uint8_t I2C_SCL = 4; // D2, SCL pin, GPIO4 for BME280
+const uint8_t PWM_PIN = 0; //D3, GPIO0, for ST7920
+const uint8_t SCLK_PIN = 12; // D6, E pin, GPIO12, for ST7920 acts like CLK (clock) input pin
+const uint8_t RW_PIN = 13; // D7, R/W pin, GPIO13, for ST7920 acts like DATA pin
+const uint8_t RS_PIN = 15; // D8, RS pin, GPIO15, for ST7920 acts like CS (Chip Select) pin
+const uint8_t TX_PIN = 2; //D4, RX pin, GPIO2, for mz-h19
+const uint8_t RX_PIN = 14; //D5, TX pin, GPIO14, for mz-h19
 
 //display ST7920
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0,/*display-clock E,SCLK;esp-GPIO12,D6*/SCLK_PIN,/*display-data R/W;esp-GPIO13,D7*/RW_PIN,/*display-RS;esp-GPIO15,D8*/RS_PIN);
@@ -54,24 +53,23 @@ SimpleTimer timer;
 // Setup Wifi connection
 WiFiManager wifiManager;
 
-// Sensors data
-int16_t t { -100};
-int16_t p { -1};
-int16_t h { -1};
-int co2 { 0};
+//sensors data
+int16_t t {-100};
+int16_t p {-1};
+int16_t h {-1};
+int co2 {0};
 float tf {0};
 float pf {0};
 float hf {0};
 uint16_t light;
 uint16_t adc_data;
-
-#define NUM_KEYS 3
+//buttons
+const uint8_t NUM_KEYS = 3;
 int adc_key_val[NUM_KEYS] = {100, 200, 360};
 uint32_t lastDebounceTime = 0;
-uint16_t debounceTime = 350;
-
+uint16_t debounceTime = 250;
 // Math data for pressure calculating, see http://bit.ly/1EXW1I9 http://bit.ly/1DIbvyj
-#define P_LEN 4
+const uint8_t P_LEN = 4;
 float p_array[P_LEN];
 float delta;
 //flags
@@ -80,7 +78,6 @@ bool timeSyncFlag = false;
 bool cloudSyncFlag = false;
 bool shouldSaveConfig = false; //flag for saving data
 bool connectedWiFiFlag = false; //flag if connected Wi-Fi
-
 //menu
 bool timeSetFlag = false;
 bool timeSetMinFlag = false;
@@ -91,33 +88,29 @@ bool timeSetYearFlag = false;
 bool backlightSetFlag = false;
 bool menuFlag = false;
 int8_t curMenuItem = 0;
-int8_t menuItemsCount = 3;
+int8_t menuItemsCount = 4;
 
-long wifiRSSI = 0;
+int32_t wifiRSSI = 0;
 
-const uint16_t pwm_light[6] = {0, 64, 96, 128, 192, 256};
-uint8_t light_mode {0};
+const uint16_t pwm_light[9] = {0, 32, 64, 96, 128, 192, 256, 320, 384};
+int8_t light_mode = 1;
 
 AsyncPing aping;
 
 WiFiUDP Udp;
-const char* ntpServerName = "ntp1.vniiftri.ru"; //NTP server name
-IPAddress ntpServerIP(89, 109, 251, 21); //NTP server IP
-const int timeZone = 5;         // GMT +5
+IPAddress ntpServerIP(89, 109, 251, 21); //NTP server IP ntp1.vniiftri.ru
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
-String timestring = "";
+
+String timestring = "";//TODO
+
 #include "graphics.h"
 
 
 time_t getNtpTime() {
-  //  if (connectedInetFlag) {
   while (Udp.parsePacket() > 0) ; // discard any previously received packets
   Serial.println("Transmit NTP Request");
-  // IPAddress timeServer;
-  // WiFi.hostByName(ntpServerName, timeServer);
-  // sendNTPpacket(timeServer);
   sendNTPpacket(ntpServerIP);
   uint32_t beginWait = millis();
   while (millis() - beginWait < 1500) {
@@ -132,10 +125,9 @@ time_t getNtpTime() {
       secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
       secsSince1900 |= (unsigned long)packetBuffer[43];
       timeSyncFlag = 1;
-      return secsSince1900 - 2208988800UL + timeZone * SECS_PER_HOUR;
+      return secsSince1900 - 2208988800UL + TIMEZONE * SECS_PER_HOUR;
     }
   }
-  //  }
   Serial.println("No NTP Response :-(");
   timeSyncFlag = 0;
   return 0; // return 0 if unable to get the time
@@ -236,7 +228,7 @@ const char *GetStringLine(uint8_t line_idx, const char *str ) { //Assumes string
 }
 
 const char* printDigits(uint16_t digits, bool blinking = false) { //prints preceding colon and leading 0, blinking
-  timestring = digits;
+  timestring = String(digits);
   if (blinking) {
     if ((millis() / 500 % 2) == 0) {
       if (digits < 10)
@@ -254,10 +246,9 @@ const char* printDigits(uint16_t digits, bool blinking = false) { //prints prece
 void drawMainScreen() {
   u8g2.clearBuffer();
   //draw time
-  u8g2.setFont(custom_font30);
+  u8g2.setFont(custom_font_14);
 
   if (timeSetFlag) {
-    u8g2.setFont(custom_font_14);
     u8g2.drawStr(40, 14, printDigits(hour(), timeSetHourFlag));
     u8g2.drawStr(60, 14, ":");
     u8g2.drawStr(65, 14, printDigits(minute(), timeSetMinFlag));
@@ -266,9 +257,16 @@ void drawMainScreen() {
     u8g2.drawStr(39, 30, printDigits(month(), timeSetMonthFlag));
     u8g2.drawStr(59, 30, ".");
     u8g2.drawStr(64, 30, printDigits(year(), timeSetYearFlag));
-    u8g2.setFont(custom_font30);
+  }
+  else if(backlightSetFlag) {
+    u8g2.setFont(u8g2_font_7x13_mf);
+    u8g2.drawStr(20, 20, "light: ");   
+    u8g2.setFont(custom_font_14);
+    u8g2.drawStr(65, 22, String(pwm_light[light_mode]).c_str());
+
   }
   else {
+    u8g2.setFont(custom_font30);
     u8g2.drawStr(15, 30 , printDigits(hour()));
     if ((millis() / 1000) % 2) u8g2.drawStr(57, 30 , ":");
     u8g2.drawStr(64, 30 , printDigits(minute()));
@@ -460,7 +458,8 @@ void readMeasurements() {
   pf = bme.readPressure() * 760.0 / 101325;
   p = static_cast<int>(floor(pf + 0.5));
   readCO2();// CO2
-  wifiRSSI = WiFi.RSSI(); //WiFi signal strength (RSSI)
+  if (connectedWiFiFlag)
+    wifiRSSI = WiFi.RSSI(); //WiFi signal strength (RSSI)
   if (adc_data > 400)
     light = adc_data;
   // Write to debug console
@@ -469,7 +468,7 @@ void readMeasurements() {
   Serial.println("Pf: " + String(pf, 1) + "mmHg");
   Serial.println("CO2: " + String(co2) + "ppm");
   Serial.println("Light sensor: " + String(light));
-  Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
+  if (connectedWiFiFlag) Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
 }
 
 void read_p_arr() {
@@ -578,7 +577,6 @@ bool loadConfig() {
 bool setupWiFi() {
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
-
   // Custom parameters
   WiFiManagerParameter custom_device_id("device_id", "Device name", device_id, 16);
   WiFiManagerParameter custom_blynk_server("blynk_server", "Blynk server", blynk_server, 64);
@@ -642,124 +640,30 @@ BLYNK_WRITE(V22) {
     }
   }
 }
-
 // Virtual pin reset
 BLYNK_WRITE(V23) {
   factoryReset();
 }
-
 // Virtual pin PWM mode
 BLYNK_WRITE(V25) {
-  if (++light_mode >= 6) light_mode = 0;
+  if (++light_mode >= sizeof(pwm_light)/sizeof(*pwm_light)) light_mode = 0;
   analogWrite(PWM_PIN, pwm_light[light_mode]);
-  Serial.println();
-  Serial.println(light_mode);
-  Serial.println(pwm_light[light_mode]);
-  Serial.println();
 }
 
-void setup() {
-  analogWrite(PWM_PIN, 64); //set backlight
-  u8g2.begin();// init display
-  drawBoot();
 
-  Serial.begin(115200); //debug sensor serial port
-  swSer.begin(9600); // init CO2 sensor serial port
-  Wire.begin(I2C_SDA, I2C_SCL);  // init I2C interface
-
-  if (!bme.begin(0x76)) { // init Pressure/Temperature sensor
-    Serial.println("Could not find a valid BME280 sensor, check wiring!");
-  }
-
-  if (!SPIFFS.begin()) {  // init filesystem
-    Serial.println("Failed to mount file system");
-    ESP.reset();
-  }
-
-  readMeasurements();
-  for (byte i = 0; i < P_LEN; i++) { //generating p array to predict pressure dropping
-    p_array[i] = pf;
-  }
-
-  connectedWiFiFlag = setupWiFi();
-  if (connectedWiFiFlag) {
-    if (!loadConfig()) {
-      Serial.println("Failed to load config");
-      factoryReset();
-    } else {
-      Serial.println("Config loaded");
-    }
-  }
-  drawBoot();
-
-  aping.on(true, [](const AsyncPingResponse & response) {
-    IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
-    if (response.answer)
-      Serial.printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%d ms\n", response.size, addr.toString().c_str(), response.icmp_seq, response.ttl, response.time);
-    else
-      Serial.printf("no answer yet for %s icmp_seq=%d\n", addr.toString().c_str(), response.icmp_seq);
-    return false; //do not stop
-  });
-
-  aping.on(false, [](const AsyncPingResponse & response) {
-    IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
-    Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", addr.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
-    if (response.total_recv > 0)
-      connectedInetFlag = true;
-    else
-      connectedInetFlag = false;
-    if (response.mac)
-      Serial.printf("detected eth address " MACSTR "\n", MAC2STR(response.mac->addr));
-    return true;
-  });
-  asyncPing();
-
-  // Setup time
-  Udp.begin(localPort);
-  Serial.print("Local port: ");
-  Serial.println(String(Udp.localPort()));
-
-  setSyncProvider(getNtpTime);
-  for (byte i = 0; i <= 2; i++) { //trying to sync 3 times
-    if (timeStatus() == timeSet) {
-      Serial.print("Time status: ");
-      Serial.println(timeStatus());
-      break;
-    }
-    Serial.println("Trying to sync");
-    setTime(getNtpTime());
-  }
-
-  // Start blynk
-  Blynk.config(blynk_token, blynk_server, blynk_port);
-  Serial.print("blynk server: ");
-  Serial.println(blynk_server);
-  Serial.print("port: ");
-  Serial.println(blynk_port);
-  Serial.print("token: ");
-  Serial.println(blynk_token);
-
-  connectBlynk();
-
-  setSyncInterval(SECS_PER_DAY); // NTP time sync interval
-  timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr); //fill Pressure array
-  timer.setInterval(10000L, readMeasurements);
-  timer.setInterval(30000L, sendMeasurements);
-  timer.setInterval(56000L, asyncPing); //pinger
-}
 
 void buttonPress() {
   if (adc_data < 400) {
     if (adc_data < adc_key_val[0]) {
       if ((millis() - lastDebounceTime) > debounceTime) {
         lastDebounceTime = millis();
-        buttonOne();
+        buttonTwo();
       }
     }
     else if (adc_data < adc_key_val[1]) {
       if ((millis() - lastDebounceTime) > debounceTime) {
         lastDebounceTime = millis();
-        buttonTwo();
+        buttonOne();
       }
     }
     else if (adc_data < adc_key_val[2]) {
@@ -797,6 +701,10 @@ void buttonOne() {
   }
   if (timeSetYearFlag)
     setTime(hour(), minute(), second(), day(), month(), year() - 1);
+  if (backlightSetFlag)  {
+    if (--light_mode < 0) light_mode = sizeof(pwm_light)/sizeof(*pwm_light)-1;
+    analogWrite(PWM_PIN, pwm_light[light_mode]);
+  }  
 }
 
 void buttonTwo() {
@@ -825,6 +733,10 @@ void buttonTwo() {
   }
   if (timeSetYearFlag)
     setTime(hour(), minute(), second(), day(), month(), year() + 1);
+  if (backlightSetFlag)  {
+    if (++light_mode >= sizeof(pwm_light)/sizeof(*pwm_light)) light_mode = 0;
+    analogWrite(PWM_PIN, pwm_light[light_mode]);
+  }
 }
 
 void buttonThree() {
@@ -844,6 +756,10 @@ void buttonThree() {
         menuFlag = false;
         break;
       case 2:
+        ESP.reset();
+        // startAP(); //start AP mode
+        break;  
+      case 3:
         menuFlag = false; //exit from menu
         break;
     }
@@ -872,15 +788,107 @@ void buttonThree() {
     }
   }
   else if (backlightSetFlag) {
-
+      backlightSetFlag = false;
   }
+}
+
+void setup() {
+  analogWrite(PWM_PIN, pwm_light[light_mode]); //set backlight
+  u8g2.begin();// init display
+  drawBoot();
+
+  Serial.begin(115200); //debug sensor serial port
+  swSer.begin(9600); // init CO2 sensor serial port
+  Wire.begin(I2C_SDA, I2C_SCL);  // init I2C interface
+
+  if (!bme.begin(0x76)) { // init Pressure/Temperature sensor
+    Serial.println("Could not find a valid BME280 sensor, check wiring!");
+  }
+
+  if (!SPIFFS.begin()) {  // init filesystem
+    Serial.println("Failed to mount file system");
+    ESP.reset();
+  }
+
+  readMeasurements();
+  for (byte i = 0; i < P_LEN; i++) { //generating p array to predict pressure dropping
+    p_array[i] = pf;
+  }
+  // wifiManager.setDebugOutput(false);
+  connectedWiFiFlag = setupWiFi();
+  if (connectedWiFiFlag) {
+    if (!loadConfig()) {
+      Serial.println("Failed to load config");
+      factoryReset();
+    } else {
+      Serial.println("Config loaded");
+    }
+    drawBoot();
+
+    aping.on(true, [](const AsyncPingResponse & response) {
+      IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+      if (response.answer)
+        Serial.printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%d ms\n", response.size, addr.toString().c_str(), response.icmp_seq, response.ttl, response.time);
+      else
+        Serial.printf("no answer yet for %s icmp_seq=%d\n", addr.toString().c_str(), response.icmp_seq);
+      return false; //do not stop
+    });
+
+    aping.on(false, [](const AsyncPingResponse & response) {
+      IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+      Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", addr.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
+      if (response.total_recv > 0)
+        connectedInetFlag = true;
+      else
+        connectedInetFlag = false;
+      if (response.mac)
+        Serial.printf("detected eth address " MACSTR "\n", MAC2STR(response.mac->addr));
+      return true;
+    });
+    asyncPing();
+
+    // Setup time
+    Udp.begin(localPort);
+    Serial.print("Local port: ");
+    Serial.println(String(Udp.localPort()));
+
+    setSyncProvider(getNtpTime);
+    for (byte i = 0; i <= 2; i++) { //trying to sync 3 times
+      if (timeStatus() == timeSet) {
+        Serial.print("Time status: ");
+        Serial.println(timeStatus());
+        break;
+      }
+      Serial.println("Trying to sync");
+      setTime(getNtpTime());
+    }
+
+    // Start blynk
+    Blynk.config(blynk_token, blynk_server, blynk_port);
+    Serial.print("blynk server: ");
+    Serial.println(blynk_server);
+    Serial.print("port: ");
+    Serial.println(blynk_port);
+    Serial.print("token: ");
+    Serial.println(blynk_token);
+
+    connectBlynk();
+
+    setSyncInterval(SECS_PER_DAY); // NTP time sync interval
+    timer.setInterval(30000L, sendMeasurements);
+    timer.setInterval(56000L, asyncPing); //pinger
+  }
+  WiFi.mode(WIFI_STA);
+  timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr); //fill Pressure array
+  timer.setInterval(10000L, readMeasurements);
+
 }
 
 void loop() {
   timer.run();
 
   if (menuFlag)
-    drawMenu("MAIN MENU", curMenuItem, "Time set\nBacklight set\nExit");
+    drawMenu("MAIN MENU", curMenuItem, "Time set\nBacklight set\nReboot\nExit");
   else
     drawMainScreen();
 

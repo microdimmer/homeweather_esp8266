@@ -20,8 +20,8 @@
 #include <U8g2lib.h>
 
 //Preferences
-const uint16_t WIFI_TIMEOUT = 60;
-const int8_t TIMEZONE = 5;         // GMT +5
+const uint16_t WIFI_TIMEOUT = 1;
+
 const char * SSID = "YourHomeWeather"; // Network credentials
 //String pass {"YHWBopka"}; // Wi-Fi AP password
 // GPIO Defines
@@ -79,9 +79,10 @@ bool cloudSyncFlag = false;
 bool shouldSaveConfig = false; //flag for saving data
 bool connectedWiFiFlag = false; //flag if connected Wi-Fi
 //menu
-bool timeSetFlag = false;
+bool timeSetFlag = false; //TODO del flags
 bool timeSetMinFlag = false;
 bool timeSetHourFlag = false;
+bool timeSetTimeZoneFlag = false;
 bool timeSetDayFlag = false;
 bool timeSetMonthFlag = false;
 bool timeSetYearFlag = false;
@@ -92,7 +93,7 @@ int8_t menuItemsCount = 4;
 
 int32_t wifiRSSI = 0;
 
-const uint16_t pwm_light[9] = {0, 32, 64, 96, 128, 192, 256, 320, 384};
+const uint16_t pwm_light[13] = {0, 2, 4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384};
 int8_t light_mode = 1;
 
 AsyncPing aping;
@@ -102,6 +103,8 @@ IPAddress ntpServerIP(89, 109, 251, 21); //NTP server IP ntp1.vniiftri.ru
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
+const uint16_t timeZonesArr[11] = {2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12};
+int8_t timeZone = 3;         // default timezone UTC +5
 
 String timestring = "";//TODO
 
@@ -125,7 +128,7 @@ time_t getNtpTime() {
       secsSince1900 |= (unsigned long)packetBuffer[42] << 8;
       secsSince1900 |= (unsigned long)packetBuffer[43];
       timeSyncFlag = 1;
-      return secsSince1900 - 2208988800UL + TIMEZONE * SECS_PER_HOUR;
+      return secsSince1900 - 2208988800UL + timeZonesArr[timeZone] * SECS_PER_HOUR;
     }
   }
   Serial.println("No NTP Response :-(");
@@ -227,19 +230,13 @@ const char *GetStringLine(uint8_t line_idx, const char *str ) { //Assumes string
   return NULL;  /* line not found */
 }
 
-const char* printDigits(uint16_t digits, bool blinking = false) { //prints preceding colon and leading 0, blinking
+const char* printDigits(uint16_t digits, bool blinking = false, bool leadingZero = true) { //prints preceding colon and leading 0, blinking
   timestring = String(digits);
-  if (blinking) {
-    if ((millis() / 500 % 2) == 0) {
-      if (digits < 10)
-        timestring = "0" + String(digits);
-    }
-    else
-      timestring = "      ";
-  }
-  else if (digits < 10)
+  if (blinking && ((millis() / 500 % 2) == 0)) 
+   return "";
+  if (digits < 10 && leadingZero)
     timestring = "0" + String(digits);
-
+  
     return timestring.c_str();
 }
 
@@ -249,9 +246,14 @@ void drawMainScreen() {
   u8g2.setFont(custom_font_14);
 
   if (timeSetFlag) {
-    u8g2.drawStr(40, 14, printDigits(hour(), timeSetHourFlag));
-    u8g2.drawStr(60, 14, ":");
-    u8g2.drawStr(65, 14, printDigits(minute(), timeSetMinFlag));
+    u8g2.drawStr(15, 14, printDigits(hour(), timeSetHourFlag));
+    u8g2.drawStr(35, 14, ":");
+    u8g2.drawStr(39, 14, printDigits(minute(), timeSetMinFlag));
+    u8g2.setFont(custom_font_7);
+    u8g2.drawStr(62, 10, "utc");
+    u8g2.setFont(custom_font_14);
+    u8g2.drawStr(76, 14, "+");
+    u8g2.drawStr(84, 14, printDigits(timeZonesArr[timeZone], timeSetTimeZoneFlag, false));
     u8g2.drawStr(15, 30, printDigits(day(), timeSetDayFlag));
     u8g2.drawStr(35, 30, ".");
     u8g2.drawStr(39, 30, printDigits(month(), timeSetMonthFlag));
@@ -263,7 +265,6 @@ void drawMainScreen() {
     u8g2.drawStr(20, 20, "light: ");   
     u8g2.setFont(custom_font_14);
     u8g2.drawStr(65, 22, String(pwm_light[light_mode]).c_str());
-
   }
   else {
     u8g2.setFont(custom_font30);
@@ -318,7 +319,7 @@ void drawMainScreen() {
 
   u8g2.drawStr(87, 47, String(p).c_str());
 
-  u8g2.setFont(custom_font7);
+  u8g2.setFont(custom_font_7);
   u8g2.drawGlyph(48, 64, 0xb0); //degree sign
   u8g2.drawStr(51, 64, "C");
   u8g2.drawGlyph(49, 48, 0x25); //percent
@@ -650,9 +651,7 @@ BLYNK_WRITE(V25) {
   analogWrite(PWM_PIN, pwm_light[light_mode]);
 }
 
-
-
-void buttonPress() {
+void adcDecode() {
   if (adc_data < 400) {
     if (adc_data < adc_key_val[0]) {
       if ((millis() - lastDebounceTime) > debounceTime) {
@@ -673,6 +672,12 @@ void buttonPress() {
       }
     }
   }
+  else {
+    if (adc_data > 950) // light sensor, auto backlight
+      analogWrite(PWM_PIN, pwm_light[2]);
+    else
+      analogWrite(PWM_PIN, pwm_light[10]);
+  }
 }
 
 void buttonOne() {
@@ -690,6 +695,9 @@ void buttonOne() {
       setTime(23, minute(), second(), day(), month(), year());
     else
       setTime(hour() - 1, minute(), second(), day(), month(), year());
+  }
+  if (timeSetTimeZoneFlag) {
+    if (--timeZone < 0 ) timeZone = sizeof(timeZonesArr)/sizeof(*timeZonesArr)-1;
   }
   if (timeSetDayFlag)
     setTime(hour(), minute(), second(), day() - 1, month(), year());
@@ -722,6 +730,9 @@ void buttonTwo() {
       setTime(0, minute(), second(), day(), month(), year());
     else
       setTime(hour() + 1, minute(), second(), day(), month(), year());
+  }
+  if (timeSetTimeZoneFlag) {
+    if (++timeZone >= sizeof(timeZonesArr)/sizeof(*timeZonesArr)) timeZone = 0;
   }
   if (timeSetDayFlag)
     setTime(hour(), minute(), second(), day() + 1, month(), year());
@@ -776,6 +787,10 @@ void buttonThree() {
     }
     else if (timeSetHourFlag) { //go to day set
       timeSetHourFlag = false;
+      timeSetTimeZoneFlag = true;
+    }
+    else if (timeSetTimeZoneFlag) { //go to timezone set
+      timeSetTimeZoneFlag = false;
       timeSetDayFlag = true;
     }
     else if (timeSetDayFlag) { //go to month set
@@ -878,7 +893,8 @@ void setup() {
     timer.setInterval(30000L, sendMeasurements);
     timer.setInterval(56000L, asyncPing); //pinger
   }
-  WiFi.mode(WIFI_STA);
+  else
+    WiFi.mode(WIFI_STA);
   timer.setInterval(SECS_PER_HOUR * 1000L, read_p_arr); //fill Pressure array
   timer.setInterval(10000L, readMeasurements);
 
@@ -893,7 +909,8 @@ void loop() {
     drawMainScreen();
 
   adc_data = analogRead(A0);
-  buttonPress();
+  adcDecode();
+
 
   if (connectedInetFlag && Blynk.connected())
     Blynk.run();

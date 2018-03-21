@@ -20,7 +20,7 @@
 #include <U8g2lib.h>
 
 //Preferences
-const uint16_t WIFI_TIMEOUT = 1;
+const uint16_t WIFI_TIMEOUT = 180;
 
 const char * SSID = "YourHomeWeather"; // Network credentials
 //String pass {"YHWBopka"}; // Wi-Fi AP password
@@ -87,14 +87,22 @@ bool timeSetDayFlag = false;
 bool timeSetMonthFlag = false;
 bool timeSetYearFlag = false;
 bool backlightSetFlag = false;
+bool backlightSetLEDFlag = false;
+bool backlightSetMinFlag = false;
+bool backlightSetMaxFlag = false;
+bool backlightSetThresoldFlag = false;
+
 bool menuFlag = false;
 int8_t curMenuItem = 0;
 int8_t menuItemsCount = 4;
 
 int32_t wifiRSSI = 0;
 
-const uint16_t pwm_light[13] = {0, 2, 4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384};
-int8_t light_mode = 1;
+const uint16_t pwm_light[14] = {0, 0, 2, 4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384};
+int8_t light_mode = 2;
+int8_t light_auto_min = 3;
+int8_t light_auto_max = 11;
+uint16_t light_auto_thresold = 950;
 
 AsyncPing aping;
 
@@ -242,9 +250,7 @@ const char* printDigits(uint16_t digits, bool blinking = false, bool leadingZero
 
 void drawMainScreen() {
   u8g2.clearBuffer();
-  //draw time
   u8g2.setFont(custom_font_14);
-
   if (timeSetFlag) {
     u8g2.drawStr(15, 14, printDigits(hour(), timeSetHourFlag));
     u8g2.drawStr(35, 14, ":");
@@ -261,12 +267,30 @@ void drawMainScreen() {
     u8g2.drawStr(64, 30, printDigits(year(), timeSetYearFlag));
   }
   else if(backlightSetFlag) {
-    u8g2.setFont(u8g2_font_7x13_mf);
-    u8g2.drawStr(20, 20, "light: ");   
-    u8g2.setFont(custom_font_14);
-    u8g2.drawStr(65, 22, String(pwm_light[light_mode]).c_str());
+    u8g2.setFont(custom_font_7);
+    u8g2.drawStr(17, 14, "led:");
+    if (light_mode == 0) {
+      u8g2.drawStr(62, 14, "min:");
+      u8g2.drawStr(13, 24, "thre");
+      u8g2.drawStr(13, 30, "sold:");
+      u8g2.drawStr(62, 30, "max:");  
+      u8g2.setFont(u8g2_font_7x13_mf);
+      u8g2.drawStr(32, 14, "auto");  
+      u8g2.setFont(custom_font_14);
+      u8g2.drawStr(32, 30, printDigits(light_auto_thresold/10,backlightSetThresoldFlag,false));
+      u8g2.drawStr(77, 14, printDigits(light_auto_min,backlightSetMinFlag,false));
+      u8g2.drawStr(77, 30, printDigits(light_auto_max,backlightSetMaxFlag,false));
+    }
+    else if (light_mode == 1) {
+        u8g2.setFont(u8g2_font_7x13_mf);
+        u8g2.drawStr(32, 14, "off");  
+      }
+    else {
+      u8g2.setFont(custom_font_14);
+      u8g2.drawStr(32, 14, printDigits(light_mode,backlightSetFlag,false));
+    }
   }
-  else {
+  else { //draw time
     u8g2.setFont(custom_font30);
     u8g2.drawStr(15, 30 , printDigits(hour()));
     if ((millis() / 1000) % 2) u8g2.drawStr(57, 30 , ":");
@@ -461,7 +485,7 @@ void readMeasurements() {
   readCO2();// CO2
   if (connectedWiFiFlag)
     wifiRSSI = WiFi.RSSI(); //WiFi signal strength (RSSI)
-  if (adc_data > 400)
+  if (adc_data > 370)
     light = adc_data;
   // Write to debug console
   Serial.println("H: " + String(hf) + "%");
@@ -652,7 +676,7 @@ BLYNK_WRITE(V25) {
 }
 
 void adcDecode() {
-  if (adc_data < 400) {
+  if (adc_data < 370) { // buttons decode
     if (adc_data < adc_key_val[0]) {
       if ((millis() - lastDebounceTime) > debounceTime) {
         lastDebounceTime = millis();
@@ -672,16 +696,16 @@ void adcDecode() {
       }
     }
   }
-  else {
-    if (adc_data > 950) // light sensor, auto backlight
-      analogWrite(PWM_PIN, pwm_light[2]);
+  else if (light_mode == 0) { // light sensor, auto backlight
+    if (adc_data > light_auto_thresold) 
+      analogWrite(PWM_PIN, pwm_light[light_auto_min]);
     else
-      analogWrite(PWM_PIN, pwm_light[10]);
+      analogWrite(PWM_PIN, pwm_light[light_auto_max]);
   }
 }
 
 void buttonOne() {
-  Serial.println("button one is pressed!");
+  // Serial.println("button one is pressed!");
   if (menuFlag)
     if (++curMenuItem > menuItemsCount - 1) curMenuItem = 0;
   if (timeSetMinFlag) {
@@ -709,14 +733,25 @@ void buttonOne() {
   }
   if (timeSetYearFlag)
     setTime(hour(), minute(), second(), day(), month(), year() - 1);
-  if (backlightSetFlag)  {
+  if (backlightSetLEDFlag) {
     if (--light_mode < 0) light_mode = sizeof(pwm_light)/sizeof(*pwm_light)-1;
-    analogWrite(PWM_PIN, pwm_light[light_mode]);
-  }  
+    if (light_mode != 0)
+      analogWrite(PWM_PIN, pwm_light[light_mode]);
+  }
+  if (backlightSetThresoldFlag) {
+    light_auto_thresold = light_auto_thresold - 10;
+    if (light_auto_thresold < 700) light_auto_thresold = 1024;
+  }
+  if (backlightSetMinFlag) {
+    if (--light_auto_min < 1 ) light_auto_min = sizeof(pwm_light)/sizeof(*pwm_light);
+  }
+  if (backlightSetMaxFlag) {
+    if (--light_auto_max < 1) light_auto_max = sizeof(pwm_light)/sizeof(*pwm_light);
+  }
 }
 
 void buttonTwo() {
-  Serial.println("button two is pressed!");
+  // Serial.println("button two is pressed!");
   if (menuFlag)
     if (--curMenuItem < 0) curMenuItem = menuItemsCount - 1;
   if (timeSetMinFlag) {
@@ -744,14 +779,25 @@ void buttonTwo() {
   }
   if (timeSetYearFlag)
     setTime(hour(), minute(), second(), day(), month(), year() + 1);
-  if (backlightSetFlag)  {
+  if (backlightSetLEDFlag)  {
     if (++light_mode >= sizeof(pwm_light)/sizeof(*pwm_light)) light_mode = 0;
-    analogWrite(PWM_PIN, pwm_light[light_mode]);
+    if (light_mode != 0 )
+      analogWrite(PWM_PIN, pwm_light[light_mode]);
+  }
+  if (backlightSetThresoldFlag) {
+    light_auto_thresold = light_auto_thresold + 10;
+    if (light_auto_thresold >= 1024) light_auto_thresold = 700;
+  }
+  if (backlightSetMinFlag) {
+    if (++light_auto_min >= sizeof(pwm_light)/sizeof(*pwm_light)) light_auto_min = 1;
+  }
+  if (backlightSetMaxFlag) {
+    if (++light_auto_max >= sizeof(pwm_light)/sizeof(*pwm_light)) light_auto_max = 1;
   }
 }
 
 void buttonThree() {
-  Serial.println("button three is pressed!");
+  // Serial.println("button three is pressed!");
   if (!menuFlag && !timeSetFlag && !backlightSetFlag)
     menuFlag = true;
   else if (menuFlag) {  //main menu
@@ -762,13 +808,13 @@ void buttonThree() {
         timeSetMinFlag = true;
         menuFlag = false;
         break;
-      case 1:
-        backlightSetFlag = true; //set backlight
+      case 1: //set backlight
+        backlightSetFlag = true; 
+        backlightSetLEDFlag = true; 
         menuFlag = false;
         break;
       case 2:
-        ESP.reset();
-        // startAP(); //start AP mode
+        factoryReset();
         break;  
       case 3:
         menuFlag = false; //exit from menu
@@ -803,7 +849,29 @@ void buttonThree() {
     }
   }
   else if (backlightSetFlag) {
-      backlightSetFlag = false;
+      if (light_mode == 0) {
+        if (backlightSetMaxFlag) { //end of backlight set
+          backlightSetMaxFlag = backlightSetFlag = false;
+          }
+        else if (backlightSetLEDFlag) {
+          backlightSetLEDFlag = false;
+          backlightSetThresoldFlag = true;
+        }
+        else if (backlightSetThresoldFlag) {
+          backlightSetThresoldFlag = false;
+          backlightSetMinFlag = true;
+        }
+        else if (backlightSetMinFlag) {
+            backlightSetMinFlag = false;
+            backlightSetMaxFlag = true;
+        }
+      }
+      else
+        backlightSetFlag = backlightSetLEDFlag = false;
+      Serial.println(backlightSetLEDFlag);
+      Serial.println(backlightSetThresoldFlag);
+      Serial.println(backlightSetMinFlag);
+      Serial.println(backlightSetMaxFlag);
   }
 }
 
@@ -824,12 +892,12 @@ void setup() {
     Serial.println("Failed to mount file system");
     ESP.reset();
   }
-
+  delay(500);
   readMeasurements();
   for (byte i = 0; i < P_LEN; i++) { //generating p array to predict pressure dropping
     p_array[i] = pf;
   }
-  // wifiManager.setDebugOutput(false);
+  wifiManager.setDebugOutput(false);
   connectedWiFiFlag = setupWiFi();
   if (connectedWiFiFlag) {
     if (!loadConfig()) {
@@ -904,7 +972,7 @@ void loop() {
   timer.run();
 
   if (menuFlag)
-    drawMenu("MAIN MENU", curMenuItem, "Time set\nBacklight set\nReboot\nExit");
+    drawMenu("MAIN MENU", curMenuItem, "Time set\nBacklight set\nReset\nExit");
   else
     drawMainScreen();
 

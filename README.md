@@ -8,7 +8,7 @@ Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, 
 
 ## Blynk:
 [Blynk.cc](http://docs.blynk.cc/)
-![PHOTO3](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/blynk.jpg)
+![PHOTO3](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/blynk.png)
 System has Blynk integration, data is bounded to this values:
 * v1 - temperature;
 * v2 - humidity;

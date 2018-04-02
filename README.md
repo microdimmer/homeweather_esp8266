@@ -1,10 +1,20 @@
 # Arduino esp8266 home weather station
 
-Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, pressure and Blynk synchronization.
+Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, atmospheric pressure and Blynk synchronization.
 
 ## Photos:
 ![PHOTO1](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/front.jpg)
 ![PHOTO2](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/disassembled.jpg)
+
+## Blynk:
+[Blynk.cc](http://docs.blynk.cc/)
+![PHOTO3](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/blynk.jpg)
+System has Blynk integration, data is bounded to this values:
+* v1 - temperature;
+* v2 - humidity;
+* v4 - atmospheric pressure;
+* v5 - CO2 sensor MH-Z19;
+* v7 - light sensor;
 
 ## Components
 
@@ -98,6 +108,6 @@ VCC - 3V3
 ```
 ## Известные проблемы:
 
-* ESP8266 греется и вносит погрешность в показания температуры, пока немного изолировал датчик BME-280 вспененным полиэтиленом
+* ESP8266 греется и вносит погрешность в показания температуры, пока изолировал датчик BME-280 вспененным полиэтиленом
 * Пришлось немного подрезать плату дисплея ST7920 сверху, не входила по высоте
 * Не удалось подключить к роутеру ASUS WL-500gP V2 (видимо нужно разбираться с типом WI-FI сети на роутере)

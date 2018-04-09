@@ -2,6 +2,15 @@
 
 Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, atmospheric pressure and Blynk synchronization.
 
+## Components
+
+* CO2 Sensor MH-Z19
+* ESP8266 (NodeMCU ESP12+ based)
+* ST7920 128x64 LCD display
+* Humidity/Pressure/Temperature BME280
+* Photoresistor 5528 LDR
+* Buttons, resistors, wires, enclosure
+
 ## Photos:
 ![PHOTO1](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/front.jpg)
 ![PHOTO2](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/disassembled.jpg)
@@ -17,15 +26,6 @@ System has Blynk integration, data is bounded to this values:
 * v4 - atmospheric pressure;
 * v5 - CO2 sensor MH-Z19;
 * v7 - light sensor;
-
-## Components
-
-* CO2 Sensor MH-Z19
-* ESP8266 (NodeMCU ESP12+ based)
-* ST7920 128x64 LCD display
-* Humidity/Pressure/Temperature BME280
-* Photoresistor 5528 LDR
-* Buttons, resistors, wires, enclosure
 
 ## Libraries
 
@@ -62,6 +62,7 @@ VCC - 3V3
 
 ## Known issues:
 
+* Heap leak
 * Temperature measurements seems to be higher due to heat from ESP8266
 * ST7920 plate need to be cutted to fit enclosure
 * Can't connect to my old ASUS WL-500gP V2
@@ -110,6 +111,7 @@ VCC - 3V3
 ```
 ## Известные проблемы:
 
+* Утечка памяти
 * ESP8266 греется и вносит погрешность в показания температуры, пока изолировал датчик BME-280 вспененным полиэтиленом
 * Пришлось немного подрезать плату дисплея ST7920 сверху, не входила по высоте
 * Не удалось подключить к роутеру ASUS WL-500gP V2 (видимо нужно разбираться с типом WI-FI сети на роутере)

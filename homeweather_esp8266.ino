@@ -68,6 +68,8 @@ const uint8_t NUM_KEYS = 3;
 int adc_key_val[NUM_KEYS] = {100, 200, 360};
 uint32_t lastDebounceTime = 0;
 uint16_t debounceTime = 250;
+uint32_t lastIdleTimeMenu = 0;
+uint32_t idleTimeMenu = 180000; // menu idle time 3 min
 // Math data for pressure calculating, see http://bit.ly/1EXW1I9 http://bit.ly/1DIbvyj
 const uint8_t P_LEN = 4;
 float p_array[P_LEN];
@@ -99,15 +101,19 @@ int8_t menuItemsCount = 4;
 int32_t wifiRSSI = 0;
 
 const uint16_t pwm_light[14] = {0, 0, 2, 4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384};
-int8_t light_mode = 2;
-int8_t light_auto_min = 3;
+int8_t light_mode = 0;
+int8_t light_auto_min = 1;
 int8_t light_auto_max = 11;
-uint16_t light_auto_thresold = 950;
+uint16_t light_auto_thresold = 1023;
+uint32_t lightLastHysteresisTimeMin = 0;
+uint32_t lightLastHysteresisTimeMax = 0;
+uint16_t lightHysteresisTime = 3000; //3 secs hysteresis fo light sensor
 
 AsyncPing aping;
 
 WiFiUDP Udp;
 IPAddress ntpServerIP(89, 109, 251, 21); //NTP server IP ntp1.vniiftri.ru
+IPAddress pingServerIP(8, 8, 8, 8); //serv for ping
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
@@ -356,6 +362,11 @@ void drawMainScreen() {
 }
 
 void drawMenu(const char *title, uint8_t start_pos, const char *line) {
+  if ((millis() - lastIdleTimeMenu) > idleTimeMenu) {
+    menuFlag = false;
+    return;  
+  }
+  
   u8g2.clearBuffer();
   byte x {0}; byte y {0};
 
@@ -475,6 +486,7 @@ void readCO2() {
 }
 
 void readMeasurements() {
+//  Serial.println(ESP.getFreeHeap());
   tf = bme.readTemperature(); //Temperature
   t = static_cast<int>(tf);
   hf = bme.readHumidity(); //Humidity
@@ -493,6 +505,7 @@ void readMeasurements() {
   // Serial.println("Pf: " + String(pf, 1) + "mmHg");
   // Serial.println("CO2: " + String(co2) + "ppm");
   // Serial.println("Light sensor: " + String(light));
+  // Serial.println(ESP.getFreeHeap());
   // if (connectedWiFiFlag) Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
 }
 
@@ -529,7 +542,8 @@ void sendMeasurements() {   // send to server
       Blynk.virtualWrite(V5, co2);
       Blynk.virtualWrite(V6, delta); //pressure delta
       Blynk.virtualWrite(V7, light); //light sensor
-
+      Blynk.virtualWrite(V8, millis()); 
+      Blynk.virtualWrite(V9, ESP.getFreeHeap());
       cloudSyncFlag = 1;
       // Serial.println("Send to Blynk server");
     }
@@ -543,27 +557,69 @@ void sendMeasurements() {   // send to server
 }
 
 bool connectBlynk() {
-  if (!Blynk.connected()) {
-    // Serial.println("Blynk is not connectd, trying to connect...");
-    if (!Blynk.connect()) {
-      // Serial.println("Failed to connect blynk...");
-      return false;
-    }
-    else {
-      // Serial.println("Connected blynk");
+  if (!Blynk.connected()) 
+    if (Blynk.connect()) 
       return true;
-    }
-  }
-  else return true;
+  return false;
 }
 
 void asyncPing() {
-  aping.begin(ntpServerIP, 3);
+  aping.begin(pingServerIP, 4);
 }
 
 bool loadConfig() {
   //Serial.println("Load config...");
   File configFile = SPIFFS.open("/config.json", "r");
+  if (!configFile) {
+    //Serial.println("Failed to open config file");
+    return false;
+  }
+
+  size_t size = configFile.size();
+  if (size > 1024) {
+    //Serial.println("Config file size is too large");
+    return false;
+  }
+
+  std::unique_ptr<char[]> buf(new char[size]);
+
+  configFile.readBytes(buf.get(), size);
+
+  StaticJsonBuffer<200> jsonBuffer;
+  JsonObject &json = jsonBuffer.parseObject(buf.get());
+
+  if (!json.success()) {
+    return false;
+  }
+
+  timeZone = json["timeZone"];  // load parameters
+  light_auto_thresold = json["light_auto_thresold"];
+  light_auto_min = json["light_auto_min"];
+  light_auto_max = json["light_auto_max"];
+  return true;
+}
+
+bool writeConfig() {
+  //Serial.println("Load config...");
+  File configFile = SPIFFS.open("/config.json", "w");
+  if (!configFile) 
+    return false;
+
+  DynamicJsonBuffer jsonBuffer;
+  JsonObject &json = jsonBuffer.createObject();
+  json["timeZone"] = timeZone;
+  json["light_auto_thresold"] = light_auto_thresold;
+  json["light_auto_min"] = light_auto_min;
+  json["light_auto_max"] = light_auto_max;
+
+  json.printTo(configFile);
+  configFile.close();
+  return true;
+}
+
+bool loadConfigWiFI() {
+  //Serial.println("Load config...");
+  File configFile = SPIFFS.open("/configwifi.json", "r");
   if (!configFile) {
     //Serial.println("Failed to open config file");
     return false;
@@ -590,7 +646,6 @@ bool loadConfig() {
     //Serial.println("Failed to parse config file");
     return false;
   }
-
   // Save parameters
   strcpy(device_id, json["device_id"]);
   strcpy(blynk_server, json["blynk_server"]);
@@ -625,11 +680,11 @@ bool setupWiFi() {
     json["device_id"] = custom_device_id.getValue();
     json["blynk_server"] = custom_blynk_server.getValue();
     json["blynk_token"] = custom_blynk_token.getValue();
-    File configFile = SPIFFS.open("/config.json", "w");
+    File configFile = SPIFFS.open("/configwifi.json", "w");
     // if (!configFile) {
     //   Serial.println("failed to open config file for writing");
     // }
-    json.printTo(Serial);
+    // json.printTo(Serial);
     json.printTo(configFile);
     configFile.close();
   }
@@ -695,11 +750,18 @@ void adcDecode() {
       }
     }
   }
-  else if (light_mode == 0) { // light sensor, auto backlight
-    if (adc_data > light_auto_thresold) 
-      analogWrite(PWM_PIN, pwm_light[light_auto_min]);
-    else
-      analogWrite(PWM_PIN, pwm_light[light_auto_max]);
+  else if (light_mode == 0) { //light sensor, auto backlight
+    if (adc_data > light_auto_thresold) {
+      if ((millis() - lightLastHysteresisTimeMin) > lightHysteresisTime) { //hysteresis logic
+        lightLastHysteresisTimeMax = millis(); 
+        analogWrite(PWM_PIN, pwm_light[light_auto_min]);
+      }
+    }  
+    else 
+      if ((millis() - lightLastHysteresisTimeMax) > lightHysteresisTime) { //hysteresis logic
+        lightLastHysteresisTimeMin = millis(); 
+        analogWrite(PWM_PIN, pwm_light[light_auto_max]);
+      }
   }
 }
 
@@ -739,7 +801,7 @@ void buttonOne() {
   }
   if (backlightSetThresoldFlag) {
     light_auto_thresold = light_auto_thresold - 10;
-    if (light_auto_thresold < 700) light_auto_thresold = 1024;
+    if (light_auto_thresold < 700) light_auto_thresold = 1023;
   }
   if (backlightSetMinFlag) {
     if (--light_auto_min < 1 ) light_auto_min = sizeof(pwm_light)/sizeof(*pwm_light);
@@ -785,7 +847,7 @@ void buttonTwo() {
   }
   if (backlightSetThresoldFlag) {
     light_auto_thresold = light_auto_thresold + 10;
-    if (light_auto_thresold >= 1024) light_auto_thresold = 700;
+    if (light_auto_thresold >= 1023) light_auto_thresold = 700;
   }
   if (backlightSetMinFlag) {
     if (++light_auto_min >= sizeof(pwm_light)/sizeof(*pwm_light)) light_auto_min = 1;
@@ -797,8 +859,10 @@ void buttonTwo() {
 
 void buttonThree() {
   // Serial.println("button three is pressed!");
-  if (!menuFlag && !timeSetFlag && !backlightSetFlag)
+  if (!menuFlag && !timeSetFlag && !backlightSetFlag) {
     menuFlag = true;
+    lastIdleTimeMenu = millis(); //to control idle menu time
+    }
   else if (menuFlag) {  //main menu
     switch (curMenuItem) {
       case 0:           //go to time set, minute set
@@ -851,6 +915,7 @@ void buttonThree() {
       if (light_mode == 0) {
         if (backlightSetMaxFlag) { //end of backlight set
           backlightSetMaxFlag = backlightSetFlag = false;
+          writeConfig();
           }
         else if (backlightSetLEDFlag) {
           backlightSetLEDFlag = false;
@@ -875,7 +940,7 @@ void setup() {
   u8g2.begin();// init display
   drawBoot();
 
-  //Serial.begin(115200); //debug sensor serial port
+//  Serial.begin(115200); //debug sensor serial port
   swSer.begin(9600); // init CO2 sensor serial port
   Wire.begin(I2C_SDA, I2C_SCL);  // init I2C interface
 
@@ -887,15 +952,16 @@ void setup() {
     // Serial.println("Failed to mount file system");
     ESP.reset();
   }
+  loadConfig();
   delay(500);
   readMeasurements();
   for (byte i = 0; i < P_LEN; i++) { //generating p array to predict pressure dropping
     p_array[i] = pf;
   }
-  // wifiManager.setDebugOutput(false);
+  wifiManager.setDebugOutput(false);
   connectedWiFiFlag = setupWiFi();
   if (connectedWiFiFlag) {
-    if (!loadConfig()) {
+    if (!loadConfigWiFI()) {
       //Serial.println("Failed to load config");
       factoryReset();
     } else {
@@ -903,17 +969,17 @@ void setup() {
     }
     drawBoot();
 
-    aping.on(true, [](const AsyncPingResponse & response) {
-      IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+    // aping.on(true, [](const AsyncPingResponse & response) {
+      // IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
       // if (response.answer)
       //   Serial.printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%d ms\n", response.size, addr.toString().c_str(), response.icmp_seq, response.ttl, response.time);
       // else
       //   Serial.printf("no answer yet for %s icmp_seq=%d\n", addr.toString().c_str(), response.icmp_seq);
-      return false; //do not stop
-    });
+      // return false; //do not stop
+    // });
 
     aping.on(false, [](const AsyncPingResponse & response) {
-      IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+      // IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
       // Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", addr.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
       if (response.total_recv > 0)
         connectedInetFlag = true;
@@ -973,7 +1039,6 @@ void loop() {
 
   adc_data = analogRead(A0);
   adcDecode();
-
 
   if (connectedInetFlag && Blynk.connected())
     Blynk.run();

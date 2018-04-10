@@ -54,9 +54,9 @@ SimpleTimer timer;
 WiFiManager wifiManager;
 
 //sensors data
-int16_t t {-100};
-int16_t p {-1};
-int16_t h {-1};
+int16_t t { -100};
+int16_t p { -1};
+int16_t h { -1};
 int co2 {0};
 float tf {0};
 float pf {0};
@@ -107,7 +107,7 @@ int8_t light_auto_max = 11;
 uint16_t light_auto_thresold = 1023;
 uint32_t lightLastHysteresisTimeMin = 0;
 uint32_t lightLastHysteresisTimeMax = 0;
-uint16_t lightHysteresisTime = 3000; //3 secs hysteresis fo light sensor
+uint16_t lightHysteresisTime = 2000; //2 secs hysteresis for light sensor
 
 AsyncPing aping;
 
@@ -246,12 +246,12 @@ const char *GetStringLine(uint8_t line_idx, const char *str ) { //Assumes string
 
 const char* printDigits(uint16_t digits, bool blinking = false, bool leadingZero = true) { //prints preceding colon and leading 0, blinking
   timestring = String(digits);
-  if (blinking && ((millis() / 500 % 2) == 0)) 
-   return "";
+  if (blinking && ((millis() / 500 % 2) == 0))
+    return "";
   if (digits < 10 && leadingZero)
     timestring = "0" + String(digits);
-  
-    return timestring.c_str();
+
+  return timestring.c_str();
 }
 
 void drawMainScreen() {
@@ -272,28 +272,28 @@ void drawMainScreen() {
     u8g2.drawStr(59, 30, ".");
     u8g2.drawStr(64, 30, printDigits(year(), timeSetYearFlag));
   }
-  else if(backlightSetFlag) {
+  else if (backlightSetFlag) {
     u8g2.setFont(custom_font_7);
     u8g2.drawStr(17, 14, "led:");
     if (light_mode == 0) {
       u8g2.drawStr(62, 14, "min:");
       u8g2.drawStr(13, 24, "thre");
       u8g2.drawStr(13, 30, "sold:");
-      u8g2.drawStr(62, 30, "max:");  
+      u8g2.drawStr(62, 30, "max:");
       u8g2.setFont(u8g2_font_7x13_mf);
-      u8g2.drawStr(32, 14, "auto");  
+      u8g2.drawStr(32, 14, "auto");
       u8g2.setFont(custom_font_14);
-      u8g2.drawStr(32, 30, printDigits(light_auto_thresold/10,backlightSetThresoldFlag,false));
-      u8g2.drawStr(77, 14, printDigits(light_auto_min,backlightSetMinFlag,false));
-      u8g2.drawStr(77, 30, printDigits(light_auto_max,backlightSetMaxFlag,false));
+      u8g2.drawStr(32, 30, printDigits(light_auto_thresold / 10, backlightSetThresoldFlag, false));
+      u8g2.drawStr(77, 14, printDigits(light_auto_min, backlightSetMinFlag, false));
+      u8g2.drawStr(77, 30, printDigits(light_auto_max, backlightSetMaxFlag, false));
     }
     else if (light_mode == 1) {
-        u8g2.setFont(u8g2_font_7x13_mf);
-        u8g2.drawStr(32, 14, "off");  
-      }
+      u8g2.setFont(u8g2_font_7x13_mf);
+      u8g2.drawStr(32, 14, "off");
+    }
     else {
       u8g2.setFont(custom_font_14);
-      u8g2.drawStr(32, 14, printDigits(light_mode,backlightSetFlag,false));
+      u8g2.drawStr(32, 14, printDigits(light_mode, backlightSetFlag, false));
     }
   }
   else { //draw time
@@ -364,9 +364,9 @@ void drawMainScreen() {
 void drawMenu(const char *title, uint8_t start_pos, const char *line) {
   if ((millis() - lastIdleTimeMenu) > idleTimeMenu) {
     menuFlag = false;
-    return;  
+    return;
   }
-  
+
   u8g2.clearBuffer();
   byte x {0}; byte y {0};
 
@@ -486,7 +486,7 @@ void readCO2() {
 }
 
 void readMeasurements() {
-//  Serial.println(ESP.getFreeHeap());
+  //  Serial.println(ESP.getFreeHeap());
   tf = bme.readTemperature(); //Temperature
   t = static_cast<int>(tf);
   hf = bme.readHumidity(); //Humidity
@@ -542,7 +542,7 @@ void sendMeasurements() {   // send to server
       Blynk.virtualWrite(V5, co2);
       Blynk.virtualWrite(V6, delta); //pressure delta
       Blynk.virtualWrite(V7, light); //light sensor
-      Blynk.virtualWrite(V8, millis()); 
+      Blynk.virtualWrite(V8, millis());
       Blynk.virtualWrite(V9, ESP.getFreeHeap());
       cloudSyncFlag = 1;
       // Serial.println("Send to Blynk server");
@@ -557,10 +557,9 @@ void sendMeasurements() {   // send to server
 }
 
 bool connectBlynk() {
-  if (!Blynk.connected()) 
-    if (Blynk.connect()) 
-      return true;
-  return false;
+  if (!Blynk.connected())
+    return Blynk.connect();
+  return true;
 }
 
 void asyncPing() {
@@ -602,7 +601,7 @@ bool loadConfig() {
 bool writeConfig() {
   //Serial.println("Load config...");
   File configFile = SPIFFS.open("/config.json", "w");
-  if (!configFile) 
+  if (!configFile)
     return false;
 
   DynamicJsonBuffer jsonBuffer;
@@ -725,7 +724,7 @@ BLYNK_WRITE(V23) {
 }
 // Virtual pin PWM mode
 BLYNK_WRITE(V25) {
-  if (++light_mode >= sizeof(pwm_light)/sizeof(*pwm_light)) light_mode = 0;
+  if (++light_mode >= sizeof(pwm_light) / sizeof(*pwm_light)) light_mode = 0;
   analogWrite(PWM_PIN, pwm_light[light_mode]);
 }
 
@@ -753,15 +752,14 @@ void adcDecode() {
   else if (light_mode == 0) { //light sensor, auto backlight
     if (adc_data > light_auto_thresold) {
       if ((millis() - lightLastHysteresisTimeMin) > lightHysteresisTime) { //hysteresis logic
-        lightLastHysteresisTimeMax = millis(); 
+        lightLastHysteresisTimeMax = millis();
         analogWrite(PWM_PIN, pwm_light[light_auto_min]);
       }
-    }  
-    else 
-      if ((millis() - lightLastHysteresisTimeMax) > lightHysteresisTime) { //hysteresis logic
-        lightLastHysteresisTimeMin = millis(); 
-        analogWrite(PWM_PIN, pwm_light[light_auto_max]);
-      }
+    }
+    else if ((millis() - lightLastHysteresisTimeMax) > lightHysteresisTime) { //hysteresis logic
+      lightLastHysteresisTimeMin = millis();
+      analogWrite(PWM_PIN, pwm_light[light_auto_max]);
+    }
   }
 }
 
@@ -782,7 +780,7 @@ void buttonOne() {
       setTime(hour() - 1, minute(), second(), day(), month(), year());
   }
   if (timeSetTimeZoneFlag) {
-    if (--timeZone < 0 ) timeZone = sizeof(timeZonesArr)/sizeof(*timeZonesArr)-1;
+    if (--timeZone < 0 ) timeZone = sizeof(timeZonesArr) / sizeof(*timeZonesArr) - 1;
   }
   if (timeSetDayFlag)
     setTime(hour(), minute(), second(), day() - 1, month(), year());
@@ -795,7 +793,7 @@ void buttonOne() {
   if (timeSetYearFlag)
     setTime(hour(), minute(), second(), day(), month(), year() - 1);
   if (backlightSetLEDFlag) {
-    if (--light_mode < 0) light_mode = sizeof(pwm_light)/sizeof(*pwm_light)-1;
+    if (--light_mode < 0) light_mode = sizeof(pwm_light) / sizeof(*pwm_light) - 1;
     if (light_mode != 0)
       analogWrite(PWM_PIN, pwm_light[light_mode]);
   }
@@ -804,10 +802,10 @@ void buttonOne() {
     if (light_auto_thresold < 700) light_auto_thresold = 1023;
   }
   if (backlightSetMinFlag) {
-    if (--light_auto_min < 1 ) light_auto_min = sizeof(pwm_light)/sizeof(*pwm_light);
+    if (--light_auto_min < 1 ) light_auto_min = sizeof(pwm_light) / sizeof(*pwm_light);
   }
   if (backlightSetMaxFlag) {
-    if (--light_auto_max < 1) light_auto_max = sizeof(pwm_light)/sizeof(*pwm_light);
+    if (--light_auto_max < 1) light_auto_max = sizeof(pwm_light) / sizeof(*pwm_light);
   }
 }
 
@@ -828,7 +826,7 @@ void buttonTwo() {
       setTime(hour() + 1, minute(), second(), day(), month(), year());
   }
   if (timeSetTimeZoneFlag) {
-    if (++timeZone >= sizeof(timeZonesArr)/sizeof(*timeZonesArr)) timeZone = 0;
+    if (++timeZone >= sizeof(timeZonesArr) / sizeof(*timeZonesArr)) timeZone = 0;
   }
   if (timeSetDayFlag)
     setTime(hour(), minute(), second(), day() + 1, month(), year());
@@ -841,7 +839,7 @@ void buttonTwo() {
   if (timeSetYearFlag)
     setTime(hour(), minute(), second(), day(), month(), year() + 1);
   if (backlightSetLEDFlag)  {
-    if (++light_mode >= sizeof(pwm_light)/sizeof(*pwm_light)) light_mode = 0;
+    if (++light_mode >= sizeof(pwm_light) / sizeof(*pwm_light)) light_mode = 0;
     if (light_mode != 0 )
       analogWrite(PWM_PIN, pwm_light[light_mode]);
   }
@@ -850,10 +848,10 @@ void buttonTwo() {
     if (light_auto_thresold >= 1023) light_auto_thresold = 700;
   }
   if (backlightSetMinFlag) {
-    if (++light_auto_min >= sizeof(pwm_light)/sizeof(*pwm_light)) light_auto_min = 1;
+    if (++light_auto_min >= sizeof(pwm_light) / sizeof(*pwm_light)) light_auto_min = 1;
   }
   if (backlightSetMaxFlag) {
-    if (++light_auto_max >= sizeof(pwm_light)/sizeof(*pwm_light)) light_auto_max = 1;
+    if (++light_auto_max >= sizeof(pwm_light) / sizeof(*pwm_light)) light_auto_max = 1;
   }
 }
 
@@ -862,7 +860,7 @@ void buttonThree() {
   if (!menuFlag && !timeSetFlag && !backlightSetFlag) {
     menuFlag = true;
     lastIdleTimeMenu = millis(); //to control idle menu time
-    }
+  }
   else if (menuFlag) {  //main menu
     switch (curMenuItem) {
       case 0:           //go to time set, minute set
@@ -872,13 +870,13 @@ void buttonThree() {
         menuFlag = false;
         break;
       case 1: //set backlight
-        backlightSetFlag = true; 
-        backlightSetLEDFlag = true; 
+        backlightSetFlag = true;
+        backlightSetLEDFlag = true;
         menuFlag = false;
         break;
       case 2:
         factoryReset();
-        break;  
+        break;
       case 3:
         menuFlag = false; //exit from menu
         break;
@@ -912,26 +910,26 @@ void buttonThree() {
     }
   }
   else if (backlightSetFlag) {
-      if (light_mode == 0) {
-        if (backlightSetMaxFlag) { //end of backlight set
-          backlightSetMaxFlag = backlightSetFlag = false;
-          writeConfig();
-          }
-        else if (backlightSetLEDFlag) {
-          backlightSetLEDFlag = false;
-          backlightSetThresoldFlag = true;
-        }
-        else if (backlightSetThresoldFlag) {
-          backlightSetThresoldFlag = false;
-          backlightSetMinFlag = true;
-        }
-        else if (backlightSetMinFlag) {
-            backlightSetMinFlag = false;
-            backlightSetMaxFlag = true;
-        }
+    if (light_mode == 0) {
+      if (backlightSetMaxFlag) { //end of backlight set
+        backlightSetMaxFlag = backlightSetFlag = false;
+        writeConfig();
       }
-      else
-        backlightSetFlag = backlightSetLEDFlag = false;
+      else if (backlightSetLEDFlag) {
+        backlightSetLEDFlag = false;
+        backlightSetThresoldFlag = true;
+      }
+      else if (backlightSetThresoldFlag) {
+        backlightSetThresoldFlag = false;
+        backlightSetMinFlag = true;
+      }
+      else if (backlightSetMinFlag) {
+        backlightSetMinFlag = false;
+        backlightSetMaxFlag = true;
+      }
+    }
+    else
+      backlightSetFlag = backlightSetLEDFlag = false;
   }
 }
 
@@ -940,7 +938,7 @@ void setup() {
   u8g2.begin();// init display
   drawBoot();
 
-//  Serial.begin(115200); //debug sensor serial port
+  //  Serial.begin(115200); //debug sensor serial port
   swSer.begin(9600); // init CO2 sensor serial port
   Wire.begin(I2C_SDA, I2C_SCL);  // init I2C interface
 
@@ -970,12 +968,12 @@ void setup() {
     drawBoot();
 
     // aping.on(true, [](const AsyncPingResponse & response) {
-      // IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
-      // if (response.answer)
-      //   Serial.printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%d ms\n", response.size, addr.toString().c_str(), response.icmp_seq, response.ttl, response.time);
-      // else
-      //   Serial.printf("no answer yet for %s icmp_seq=%d\n", addr.toString().c_str(), response.icmp_seq);
-      // return false; //do not stop
+    // IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+    // if (response.answer)
+    //   Serial.printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%d ms\n", response.size, addr.toString().c_str(), response.icmp_seq, response.ttl, response.time);
+    // else
+    //   Serial.printf("no answer yet for %s icmp_seq=%d\n", addr.toString().c_str(), response.icmp_seq);
+    // return false; //do not stop
     // });
 
     aping.on(false, [](const AsyncPingResponse & response) {

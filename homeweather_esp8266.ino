@@ -79,7 +79,6 @@ volatile bool connectedInetFlag = false; //flag if connected
 bool timeSyncFlag = false;
 bool cloudSyncFlag = false;
 bool shouldSaveConfig = false; //flag for saving data
-bool connectedWiFiFlag = false; //flag if connected Wi-Fi
 //menu
 bool timeSetFlag = false; //TODO del flags
 bool timeSetMinFlag = false;
@@ -113,7 +112,7 @@ AsyncPing aping;
 
 WiFiUDP Udp;
 IPAddress ntpServerIP(89, 109, 251, 21); //NTP server IP ntp1.vniiftri.ru
-IPAddress pingServerIP(8, 8, 8, 8); //serv for ping
+IPAddress pingServerIP(139, 59, 206, 133); //blynk serv for ping
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
@@ -123,6 +122,7 @@ int8_t timeZone = 3;         // default timezone UTC +5
 String timestring = "";//TODO
 
 #include "graphics.h"
+
 
 
 time_t getNtpTime() {
@@ -303,7 +303,7 @@ void drawMainScreen() {
     u8g2.drawStr(64, 30 , printDigits(minute()));
   }
 
-  if (connectedWiFiFlag) {
+  if (WiFi.status() == WL_CONNECTED) {
     drawSignalQuality(0, 0);
   }
   if (timeSyncFlag) {
@@ -495,7 +495,7 @@ void readMeasurements() {
   pf = bme.readPressure() * 760.0 / 101325;
   p = static_cast<int>(floor(pf + 0.5));
   readCO2();// CO2
-  if (connectedWiFiFlag)
+  if (WiFi.status() == WL_CONNECTED)
     wifiRSSI = WiFi.RSSI(); //WiFi signal strength (RSSI)
   if (adc_data > 370)
     light = adc_data;
@@ -506,7 +506,7 @@ void readMeasurements() {
   // Serial.println("CO2: " + String(co2) + "ppm");
   // Serial.println("Light sensor: " + String(light));
   // Serial.println(ESP.getFreeHeap());
-  // if (connectedWiFiFlag) Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
+  // if (WiFi.status() == WL_CONNECTED) Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
 }
 
 void read_p_arr() {
@@ -563,7 +563,10 @@ bool connectBlynk() {
 }
 
 void asyncPing() {
-  aping.begin(pingServerIP, 4);
+  if (WiFi.status() == WL_CONNECTED)
+    aping.begin(pingServerIP, 5, 1500);
+  else
+    connectedInetFlag = false;  
 }
 
 bool loadConfig() {
@@ -957,8 +960,7 @@ void setup() {
     p_array[i] = pf;
   }
   wifiManager.setDebugOutput(false);
-  connectedWiFiFlag = setupWiFi();
-  if (connectedWiFiFlag) {
+  if (setupWiFi()) {
     if (!loadConfigWiFI()) {
       //Serial.println("Failed to load config");
       factoryReset();
@@ -978,7 +980,7 @@ void setup() {
 
     aping.on(false, [](const AsyncPingResponse & response) {
       // IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
-      // Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", addr.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
+      // Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", pingServerIP.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
       if (response.total_recv > 0)
         connectedInetFlag = true;
       else
@@ -1007,18 +1009,12 @@ void setup() {
 
     // Start blynk
     Blynk.config(blynk_token, blynk_server, blynk_port);
-    // Serial.print("blynk server: ");
-    // Serial.println(blynk_server);
-    // Serial.print("port: ");
-    // Serial.println(blynk_port);
-    // Serial.print("token: ");
-    // Serial.println(blynk_token);
 
-    connectBlynk();
+    //connectBlynk();
 
     setSyncInterval(SECS_PER_DAY); // NTP time sync interval
     timer.setInterval(30000L, sendMeasurements);
-    timer.setInterval(56000L, asyncPing); //pinger
+    timer.setInterval(51000L, asyncPing); //pinger
   }
   else
     WiFi.mode(WIFI_STA);
@@ -1038,7 +1034,8 @@ void loop() {
   adc_data = analogRead(A0);
   adcDecode();
 
-  if (connectedInetFlag && Blynk.connected())
+  if (connectedInetFlag)
+  // if (connectedInetFlag && Blynk.connected())
     Blynk.run();
 }
 

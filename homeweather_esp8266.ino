@@ -11,8 +11,9 @@
 #include <WiFiUdp.h> //for NTP
 #include <AsyncPing.h> //async pinger
 #include <TimeLib.h> //timekeeping
-#include <ESP8266httpUpdate.h> // OTA updates
-#include <BlynkSimpleEsp8266.h> // Blynk
+#include <ESP8266httpUpdate.h> //OTA updates
+#include <BlynkSimpleEsp8266.h> //Blynk
+// #include <CayenneMQTTESP8266.h> //Cayenne
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 #include <SimpleTimer.h> // Handy timers
 #include <Adafruit_Sensor.h>
@@ -101,12 +102,13 @@ int32_t wifiRSSI = 0;
 
 const uint16_t pwm_light[14] = {0, 0, 2, 4, 8, 16, 32, 64, 96, 128, 192, 256, 320, 384};
 int8_t light_mode = 0;
-int8_t light_auto_min = 1;
-int8_t light_auto_max = 11;
-uint16_t light_auto_thresold = 1023;
+int8_t light_auto_min = 2; //default min backlight
+int8_t light_auto_max = 11; //default max backlight
+uint16_t light_auto_thresold = 1023; //default thresold
 uint32_t lightLastHysteresisTimeMin = 0;
 uint32_t lightLastHysteresisTimeMax = 0;
-uint16_t lightHysteresisTime = 2000; //2 secs hysteresis for light sensor
+uint16_t lightHysteresisTime = 2500; //2.5 secs hysteresis for light sensor
+
 
 AsyncPing aping;
 
@@ -968,15 +970,6 @@ void setup() {
       //Serial.println("Config loaded");
     }
     drawBoot();
-
-    // aping.on(true, [](const AsyncPingResponse & response) {
-    // IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
-    // if (response.answer)
-    //   Serial.printf("%d bytes from %s: icmp_seq=%d ttl=%d time=%d ms\n", response.size, addr.toString().c_str(), response.icmp_seq, response.ttl, response.time);
-    // else
-    //   Serial.printf("no answer yet for %s icmp_seq=%d\n", addr.toString().c_str(), response.icmp_seq);
-    // return false; //do not stop
-    // });
 
     aping.on(false, [](const AsyncPingResponse & response) {
       // IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0

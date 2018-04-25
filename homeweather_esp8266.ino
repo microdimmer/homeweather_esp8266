@@ -12,8 +12,6 @@
 #include <AsyncPing.h> //async pinger
 #include <TimeLib.h> //timekeeping
 #include <ESP8266httpUpdate.h> //OTA updates
-#include <BlynkSimpleEsp8266.h> //Blynk
-// #include <CayenneMQTTESP8266.h> //Cayenne
 #include <ArduinoJson.h> //https://github.com/bblanchon/ArduinoJson
 #include <SimpleTimer.h> // Handy timers
 #include <Adafruit_Sensor.h>
@@ -21,8 +19,16 @@
 #include <U8g2lib.h>
 
 //Preferences
-const uint16_t WIFI_TIMEOUT = 180;
+// #define DEBUG //uncomment for debug messages
+// #define BLYNK //use Blynk or Cayenne data aggregator
 
+#ifdef BLYNK
+#include <BlynkSimpleEsp8266.h> //Blynk
+#else
+#include <CayenneMQTTESP8266.h> //Cayenne
+#endif
+
+const uint16_t WIFI_TIMEOUT = 180;
 const char * SSID = "YourHomeWeather"; // Network credentials
 //String pass {"YHWBopka"}; // Wi-Fi AP password
 // GPIO Defines
@@ -42,10 +48,17 @@ Adafruit_BME280 bme;
 SoftwareSerial swSer(RX_PIN, TX_PIN, false, 256);// CO2 SERIAL
 byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
 unsigned char response[7];
+#ifdef BLYNK
 // Blynk token
 char blynk_token[33] {"7ca0a9293079453499aa5453883510cf"};
 char blynk_server[64] {"blynk-cloud.com"};
 const uint16_t blynk_port {8442};
+#else
+// Cyenne credentials
+char cayenne_username[] = "edc8aad0-d07d-11e7-8123-07faebe02555";
+char cayenne_password[] = "3924eb177886b6280ee0b13b0045d2a5a7e66216";
+char cayenne_clientID[] = "2dd4dd50-479e-11e8-bf56-db14f0c2b326";
+#endif
 // Device Id
 char device_id[17] = "Home Weather";
 const char fw_ver[17] = "0.1.0";
@@ -64,6 +77,7 @@ float pf {0};
 float hf {0};
 uint16_t light;
 uint16_t adc_data;
+uint32_t uptime = 0;
 //buttons
 const uint8_t NUM_KEYS = 3;
 int adc_key_val[NUM_KEYS] = {100, 200, 360};
@@ -79,7 +93,10 @@ float delta;
 volatile bool connectedInetFlag = false; //flag if connected
 bool timeSyncFlag = false;
 bool cloudSyncFlag = false;
-bool shouldSaveConfig = false; //flag for saving data
+#ifndef BLYNK
+bool CayenneConnectedFlag = false;
+#endif
+bool shouldSaveConfig = false; //flag for saving data if connectio estalished
 //menu
 bool timeSetFlag = false; //TODO del flags
 bool timeSetMinFlag = false;
@@ -95,7 +112,7 @@ bool backlightSetMaxFlag = false;
 bool backlightSetThresoldFlag = false;
 
 bool menuFlag = false;
-int8_t curMenuItem = 0;
+int8_t curMenuItem = 3;
 int8_t menuItemsCount = 4;
 
 int32_t wifiRSSI = 0;
@@ -109,12 +126,15 @@ uint32_t lightLastHysteresisTimeMin = 0;
 uint32_t lightLastHysteresisTimeMax = 0;
 uint16_t lightHysteresisTime = 2500; //2.5 secs hysteresis for light sensor
 
-
 AsyncPing aping;
 
 WiFiUDP Udp;
 IPAddress ntpServerIP(89, 109, 251, 21); //NTP server IP ntp1.vniiftri.ru
+#ifdef BLYNK
 IPAddress pingServerIP(139, 59, 206, 133); //blynk serv for ping
+#else
+IPAddress pingServerIP(89, 109, 251, 21); //serv for ping
+#endif
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
 byte packetBuffer[NTP_PACKET_SIZE]; //buffer to hold incoming & outgoing packets
@@ -125,17 +145,24 @@ String timestring = "";//TODO
 
 #include "graphics.h"
 
+#if DEBUG
+#define PRINTLNF(s)   { Serial.println(F(s)); }
+#define PRINTLN(s,v)  { Serial.print(F(s)); Serial.println(v); }
+#else
+#define PRINTLNF(s)
+#define PRINTLN(s,v)
+#endif
 
 
 time_t getNtpTime() {
   while (Udp.parsePacket() > 0) ; // discard any previously received packets
-  //Serial.println("Transmit NTP Request");
+  PRINTLNF("Transmit NTP Request");
   sendNTPpacket(ntpServerIP);
   uint32_t beginWait = millis();
   while (millis() - beginWait < 1500) {
     int size = Udp.parsePacket();
     if (size >= NTP_PACKET_SIZE) {
-      //Serial.println("Receive NTP Response");
+      PRINTLNF("Receive NTP Response");
       Udp.read(packetBuffer, NTP_PACKET_SIZE);  // read packet into the buffer
       unsigned long secsSince1900;
       // convert four bytes starting at location 40 to a long integer
@@ -147,7 +174,7 @@ time_t getNtpTime() {
       return secsSince1900 - 2208988800UL + timeZonesArr[timeZone] * SECS_PER_HOUR;
     }
   }
-  //Serial.println("No NTP Response :-(");
+  PRINTLNF("No NTP Response :-(");
   timeSyncFlag = 0;
   return 0; // return 0 if unable to get the time
 }
@@ -174,13 +201,18 @@ void sendNTPpacket(IPAddress &address) { // send an NTP request to the time serv
 
 void syncTime() {
   setTime(getNtpTime());
-  // timeStatus_t t_status = timeStatus();
-  // if (t_status == timeNotSet)
-  //   Serial.println("Time never been synced");
-  // else if (t_status == timeNeedsSync)
-  //   Serial.println("Time is need to sync");
-  // else if (t_status == timeSet)
-  //   Serial.println("Time is synced");
+  #if DEBUG
+    timeStatus_t t_status = timeStatus();
+    if (t_status == timeNotSet) {
+      PRINTLNF("Time never been synced");
+    }  
+    else if (t_status == timeNeedsSync) {
+      PRINTLNF("Time is need to sync");
+    }  
+    else if (t_status == timeSet) {
+      PRINTLNF("Time is synced");
+    }
+  #endif    
 }
 
 String weekdayRus(byte weekday) {
@@ -439,12 +471,12 @@ void drawConnectionDetails(String ssid, String mins, String url) {
 }
 
 void saveConfigCallback() { //callback notifying when need to save config
-  //Serial.println("Should save config");
+  PRINTLNF("Should save config");
   shouldSaveConfig = true;
 }
 
 void factoryReset() {
-  //Serial.println("Resetting to factory settings");
+  PRINTLNF("Resetting to factory settings");
   wifiManager.resetSettings();
   SPIFFS.format();
   ESP.reset();
@@ -474,41 +506,41 @@ void readCO2() {
     crc++;
 
     if ( !(response[6] == crc) ) {
-      //Serial.println("CO2: CRC error: " + String(crc) + " / " + String(response[6]));
-    } else {
+      PRINTLN("CO2: CRC error: ", String(crc) + " / " + String(response[6]));
+    } 
+    else {
       unsigned int responseHigh = (unsigned int) response[0];
       unsigned int responseLow = (unsigned int) response[1];
       unsigned int ppm = (256 * responseHigh) + responseLow;
       co2 = ppm;
-      //Serial.println("CO2:" + String(co2));
+      PRINTLN("CO2:",co2);
     }
   } else {
-    //Serial.println("CO2: Header not found");
+    PRINTLNF("CO2: Header not found");
   }
 }
 
 void readMeasurements() {
-  //  Serial.println(ESP.getFreeHeap());
   tf = bme.readTemperature(); //Temperature
   t = static_cast<int>(tf);
   hf = bme.readHumidity(); //Humidity
   h = static_cast<int>(hf);
-  // Pressure (in mmHg)
-  pf = bme.readPressure() * 760.0 / 101325;
+  pf = bme.readPressure() * 760.0 / 101325; //Pressure (in mmHg)
   p = static_cast<int>(floor(pf + 0.5));
   readCO2();// CO2
-  if (WiFi.status() == WL_CONNECTED)
+  if (WiFi.status() == WL_CONNECTED) {
     wifiRSSI = WiFi.RSSI(); //WiFi signal strength (RSSI)
+    PRINTLN("Wi-Fi RSSI: ", String(wifiRSSI) + "dBm"); //Write to debug console
+  }  
   if (adc_data > 370)
     light = adc_data;
-  // Write to debug console
-  // Serial.println("H: " + String(hf) + "%");
-  // Serial.println("T: " + String(tf) + "C");
-  // Serial.println("Pf: " + String(pf, 1) + "mmHg");
-  // Serial.println("CO2: " + String(co2) + "ppm");
-  // Serial.println("Light sensor: " + String(light));
-  // Serial.println(ESP.getFreeHeap());
-  // if (WiFi.status() == WL_CONNECTED) Serial.println("Wi-Fi RSSI: " + String(wifiRSSI) + "dBm");
+  
+  PRINTLN("H: ", String(hf) + "%"); //Write to debug console
+  PRINTLN("T: ", String(tf) + "C");
+  PRINTLN("Pf: ", String(pf, 1) + "mmHg");
+  PRINTLN("CO2: ", String(co2) + "ppm");
+  PRINTLN("Light sensor: ", String(light));
+  PRINTLN("Free Heap: ",ESP.getFreeHeap());
 }
 
 void read_p_arr() {
@@ -529,14 +561,14 @@ void read_p_arr() {
   a = a - P_LEN * sumXY;
   a = a / (sumX * sumX - P_LEN * sumX2);
   delta = a * 3 ; // delta of changing pressure for 3 hours
-  // Serial.println("delta ");
-  // Serial.print(delta);
+  PRINTLN("Pressure delta ", delta);
 }
 
 void sendMeasurements() {   // send to server
   if (connectedInetFlag) {
     if (timeStatus() == timeNotSet)
       syncTime();
+  #ifdef BLYNK    
     if (connectBlynk()) {
       Blynk.virtualWrite(V1, tf);
       Blynk.virtualWrite(V2, h);
@@ -546,23 +578,38 @@ void sendMeasurements() {   // send to server
       Blynk.virtualWrite(V7, light); //light sensor
       Blynk.virtualWrite(V8, millis());
       Blynk.virtualWrite(V9, ESP.getFreeHeap());
+      Blynk.run();
+  #else    
+    if (CayenneConnectedFlag) {
+      Cayenne.virtualWrite(1, tf);
+      Cayenne.virtualWrite(2, hf);
+      Cayenne.virtualWrite(4, pf);
+      Cayenne.virtualWrite(5, co2);
+      Cayenne.virtualWrite(6, delta); //pressure delta
+      Cayenne.virtualWrite(7, light); //light sensor
+      Cayenne.virtualWrite(8, numberOfHours(uptime+=30)); //uptime hours
+      Cayenne.virtualWrite(9, ESP.getFreeHeap());
+      Cayenne.loop();
+  #endif  
       cloudSyncFlag = 1;
-      // Serial.println("Send to Blynk server");
+      PRINTLNF("Send to data server");
     }
     else {
       cloudSyncFlag = 0;
-      // Serial.println("Send to Blynk server fails!");
+      PRINTLNF("Send data to server fails!");
     }
   }
   else
     cloudSyncFlag = 0;
 }
 
+#ifdef BLYNK 
 bool connectBlynk() {
   if (!Blynk.connected())
     return Blynk.connect();
   return true;
 }
+#endif
 
 void asyncPing() {
   if (WiFi.status() == WL_CONNECTED)
@@ -572,16 +619,16 @@ void asyncPing() {
 }
 
 bool loadConfig() {
-  //Serial.println("Load config...");
+  PRINTLNF("Load config...");
   File configFile = SPIFFS.open("/config.json", "r");
   if (!configFile) {
-    //Serial.println("Failed to open config file");
+    PRINTLNF("Failed to open config file");
     return false;
   }
 
   size_t size = configFile.size();
   if (size > 1024) {
-    //Serial.println("Config file size is too large");
+    PRINTLNF("Config file size is too large");
     return false;
   }
 
@@ -593,6 +640,7 @@ bool loadConfig() {
   JsonObject &json = jsonBuffer.parseObject(buf.get());
 
   if (!json.success()) {
+    PRINTLNF("Failed to parse config file");
     return false;
   }
 
@@ -604,7 +652,7 @@ bool loadConfig() {
 }
 
 bool writeConfig() {
-  //Serial.println("Load config...");
+  PRINTLNF("Load config...");
   File configFile = SPIFFS.open("/config.json", "w");
   if (!configFile)
     return false;
@@ -622,16 +670,16 @@ bool writeConfig() {
 }
 
 bool loadConfigWiFI() {
-  //Serial.println("Load config...");
+  PRINTLNF("Load config...");
   File configFile = SPIFFS.open("/configwifi.json", "r");
   if (!configFile) {
-    //Serial.println("Failed to open config file");
+    PRINTLNF("Failed to open config file");
     return false;
   }
 
   size_t size = configFile.size();
   if (size > 1024) {
-    //Serial.println("Config file size is too large");
+    PRINTLNF("Config file size is too large");
     return false;
   }
 
@@ -647,13 +695,19 @@ bool loadConfigWiFI() {
   JsonObject &json = jsonBuffer.parseObject(buf.get());
 
   if (!json.success()) {
-    //Serial.println("Failed to parse config file");
+    PRINTLNF("Failed to parse config file");
     return false;
   }
   // Save parameters
+  #ifdef BLYNK 
   strcpy(device_id, json["device_id"]);
   strcpy(blynk_server, json["blynk_server"]);
   strcpy(blynk_token, json["blynk_token"]);
+  #else
+  strcpy(cayenne_username, json["cayenne_username"]);
+  strcpy(cayenne_password, json["cayenne_password"]);
+  strcpy(cayenne_clientID, json["cayenne_clientID"]);
+  #endif
   return true;
 }
 
@@ -661,48 +715,64 @@ bool setupWiFi() {
   //set config save notify callback
   wifiManager.setSaveConfigCallback(saveConfigCallback);
   // Custom parameters
+  #ifdef BLYNK 
   WiFiManagerParameter custom_device_id("device_id", "Device name", device_id, 16);
   WiFiManagerParameter custom_blynk_server("blynk_server", "Blynk server", blynk_server, 64);
   WiFiManagerParameter custom_blynk_token("blynk_token", "Blynk token", blynk_token, 34);
   wifiManager.addParameter(&custom_blynk_server);
   wifiManager.addParameter(&custom_blynk_token);
   wifiManager.addParameter(&custom_device_id);
+  #else
+  WiFiManagerParameter custom_cayenne_username("cayenne_username", "Username", cayenne_username, 37);
+  WiFiManagerParameter custom_cayenne_password("cayenne_password", "Password", cayenne_password, 41);
+  WiFiManagerParameter custom_cayenne_clientID("cayenne_clientID", "Client ID", cayenne_clientID, 37);
+  wifiManager.addParameter(&custom_cayenne_username);
+  wifiManager.addParameter(&custom_cayenne_password);
+  wifiManager.addParameter(&custom_cayenne_clientID);
+  #endif
   drawConnectionDetails(SSID, String(static_cast<int>(WIFI_TIMEOUT / 60)) + " mins", "http://192.168.4.1");
   wifiManager.setTimeout(WIFI_TIMEOUT);
-  //  wifiManager.setAPCallback(configModeCallback);
 
   if (!wifiManager.autoConnect(SSID)) {
     //  if (!wifiManager.autoConnect(ssid.c_str(), pass.c_str())) { \\ с паролем иногда не пускает, пока будем без
-    //Serial.println("failed to connect and hit timeout");
+    PRINTLNF("failed to connect and hit timeout");
     return false;
   }
 
   if (shouldSaveConfig) { //save the custom parameters to FS
-    //Serial.println("saving config");
+    PRINTLNF("saving config");
     DynamicJsonBuffer jsonBuffer;
     JsonObject &json = jsonBuffer.createObject();
+    #ifdef BLYNK 
     json["device_id"] = custom_device_id.getValue();
     json["blynk_server"] = custom_blynk_server.getValue();
     json["blynk_token"] = custom_blynk_token.getValue();
+    #else
+    json["cayenne_username"] = custom_cayenne_username.getValue();
+    json["cayenne_password"] = custom_cayenne_password.getValue();
+    json["cayenne_clientID"] = custom_cayenne_clientID.getValue();
+    #endif
     File configFile = SPIFFS.open("/configwifi.json", "w");
-    // if (!configFile) {
-    //   Serial.println("failed to open config file for writing");
-    // }
-    // json.printTo(Serial);
+    #if DEBUG
+    if (!configFile) {
+      PRINTLN("failed to open config file for writing");
+    }
+    json.printTo(Serial);
+    #endif
     json.printTo(configFile);
     configFile.close();
   }
 
-  //Serial.println("WiFi connected"); //if you get here you have connected to the WiFi
-  //Serial.print("IP address: ");
-  //Serial.println(WiFi.localIP());
+  PRINTLNF("WiFi connected"); //if you get here you have connected to the WiFi
+  PRINTLN("IP address: ",WiFi.localIP());
   return true;
 }
 
+#ifdef BLYNK 
 // Virtual pin update FW
 BLYNK_WRITE(V22) {
   if (param.asInt() == 1) {
-    //Serial.println("Got a FW update request");
+    PRINTLNF("Got a FW update request");
 
     char full_version[34] {""};
     strcat(full_version, device_id);
@@ -712,13 +782,13 @@ BLYNK_WRITE(V22) {
     t_httpUpdate_return ret = ESPhttpUpdate.update("http://romfrom.space/get", full_version);
     switch (ret) {
       case HTTP_UPDATE_FAILED:
-        //Serial.println("[update] Update failed.");
+        PRINTLNF("[update] Update failed.");
         break;
       case HTTP_UPDATE_NO_UPDATES:
-        //Serial.println("[update] Update no Update.");
+        PRINTLNF("[update] Update no Update.");
         break;
       case HTTP_UPDATE_OK:
-        //Serial.println("[update] Update ok.");
+        PRINTLNF("[update] Update ok.");
         break;
     }
   }
@@ -732,6 +802,16 @@ BLYNK_WRITE(V25) {
   if (++light_mode >= sizeof(pwm_light) / sizeof(*pwm_light)) light_mode = 0;
   analogWrite(PWM_PIN, pwm_light[light_mode]);
 }
+#else
+//cayenne connected callback
+CAYENNE_CONNECTED() {
+  CayenneConnectedFlag = true;
+}
+//cayenne disconnected callback
+CAYENNE_DISCONNECTED() {
+  CayenneConnectedFlag = false;
+}
+#endif
 
 void adcDecode() {
   if (adc_data < 370) { // buttons decode
@@ -769,7 +849,7 @@ void adcDecode() {
 }
 
 void buttonOne() {
-  // Serial.println("button one is pressed!");
+  PRINTLNF("button one is pressed!");
   if (menuFlag)
     if (++curMenuItem > menuItemsCount - 1) curMenuItem = 0;
   if (timeSetMinFlag) {
@@ -815,7 +895,7 @@ void buttonOne() {
 }
 
 void buttonTwo() {
-  // Serial.println("button two is pressed!");
+  PRINTLNF("button two is pressed!");
   if (menuFlag)
     if (--curMenuItem < 0) curMenuItem = menuItemsCount - 1;
   if (timeSetMinFlag) {
@@ -861,7 +941,7 @@ void buttonTwo() {
 }
 
 void buttonThree() {
-  // Serial.println("button three is pressed!");
+  PRINTLNF("button three is pressed!");
   if (!menuFlag && !timeSetFlag && !backlightSetFlag) {
     menuFlag = true;
     lastIdleTimeMenu = millis(); //to control idle menu time
@@ -942,17 +1022,22 @@ void setup() {
   analogWrite(PWM_PIN, pwm_light[light_mode]); //set backlight
   u8g2.begin();// init display
   drawBoot();
-
-  //  Serial.begin(115200); //debug sensor serial port
+ 
+  #if DEBUG
+    Serial.begin(115200); //debug sensor serial port
+  #else
+    wifiManager.setDebugOutput(false); //disable wifiManager debug output
+  #endif
+  
   swSer.begin(9600); // init CO2 sensor serial port
   Wire.begin(I2C_SDA, I2C_SCL);  // init I2C interface
 
   if (!bme.begin(0x76)) { // init Pressure/Temperature sensor
-    // Serial.println("Could not find a valid BME280 sensor, check wiring!");
+    PRINTLNF("Could not find a valid BME280 sensor, check wiring!");
   }
 
   if (!SPIFFS.begin()) {  // init filesystem
-    // Serial.println("Failed to mount file system");
+    PRINTLNF("Failed to mount file system");
     ESP.reset();
   }
   loadConfig();
@@ -961,49 +1046,53 @@ void setup() {
   for (byte i = 0; i < P_LEN; i++) { //generating p array to predict pressure dropping
     p_array[i] = pf;
   }
-  wifiManager.setDebugOutput(false);
+
   if (setupWiFi()) {
     if (!loadConfigWiFI()) {
-      //Serial.println("Failed to load config");
+      PRINTLNF("Failed to load config");
       factoryReset();
-    } else {
-      //Serial.println("Config loaded");
+    } 
+    else {
+      PRINTLNF("Config loaded");
     }
     drawBoot();
 
     aping.on(false, [](const AsyncPingResponse & response) {
-      // IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
-      // Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", pingServerIP.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
+      #if DEBUG
+      IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+      Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", pingServerIP.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
+      if (response.mac)
+        Serial.printf("detected eth address " MACSTR "\n", MAC2STR(response.mac->addr));
+      #endif
       if (response.total_recv > 0)
         connectedInetFlag = true;
       else
         connectedInetFlag = false;
-      // if (response.mac)
-      //   Serial.printf("detected eth address " MACSTR "\n", MAC2STR(response.mac->addr));
       return true;
     });
     asyncPing();
 
-    // Setup time
-    Udp.begin(localPort);
-    // Serial.print("Local port: ");
-    // Serial.println(String(Udp.localPort()));
+    Udp.begin(localPort);// Setup time
+    PRINTLN("Local port: ", Udp.localPort());
 
     setSyncProvider(getNtpTime);
     for (byte i = 0; i <= 2; i++) { //trying to sync 3 times
       if (timeStatus() == timeSet) {
-        // Serial.print("Time status: ");
-        // Serial.println(timeStatus());
+        PRINTLN("Time status: ", timeStatus());
         break;
       }
-      // Serial.println("Trying to sync");
+      PRINTLNF("Trying to sync");
       setTime(getNtpTime());
     }
 
-    // Start blynk
+    #ifdef BLYNK
+    // Start Blynk
     Blynk.config(blynk_token, blynk_server, blynk_port);
-
-    //connectBlynk();
+    connectBlynk();
+    #else
+    // Start Cayenne
+    Cayenne.begin(cayenne_username,cayenne_password,cayenne_clientID);
+    #endif
 
     setSyncInterval(SECS_PER_DAY); // NTP time sync interval
     timer.setInterval(30000L, sendMeasurements);
@@ -1027,8 +1116,6 @@ void loop() {
   adc_data = analogRead(A0);
   adcDecode();
 
-  if (connectedInetFlag)
-  // if (connectedInetFlag && Blynk.connected())
-    Blynk.run();
+  // if (connectedInetFlag)
+    // Blynk.run();
 }
-

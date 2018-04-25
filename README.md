@@ -1,6 +1,6 @@
 # Arduino esp8266 home weather station
 
-Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, atmospheric pressure and Blynk synchronization.
+Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, atmospheric pressure and Blynk or Cayenne synchronization.
 
 ## Components
 
@@ -15,12 +15,16 @@ Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, 
 ![PHOTO1](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/front.jpg)
 ![PHOTO2](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/disassembled.jpg)
 
-## Blynk:
+## Blynk and Cayenne:
 [Blynk docs](http://docs.blynk.cc/)
 
 <img src="https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/blynk.png" height="360">
 
-System has Blynk integration, data is bounded to this values:
+[Cayenne docs](https://mydevices.com/cayenne/features/api/)
+
+<img src="https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/cayenne.png" height="360">
+
+Data is bounded to this values:
 * v1 - temperature;
 * v2 - humidity;
 * v4 - atmospheric pressure;
@@ -31,6 +35,7 @@ System has Blynk integration, data is bounded to this values:
 
 * [Arduino-esp8266](https://github.com/esp8266/Arduino)
 * [Blynk](https://github.com/blynkkk/blynk-library)
+* [Cayenne](https://github.com/myDevicesIoT/Cayenne-MQTT-Arduino)
 * [u8g2](https://github.com/olikraus/u8g2)
 * [Adafruit_BME280_Library](https://github.com/adafruit/Adafruit_BME280_Library)
 * [WiFiManager](https://github.com/tzapu/WiFiManager)
@@ -62,14 +67,14 @@ VCC - 3V3
 
 ## Known issues:
 
-* Heap leak
+* Heap leak with Blynk lybrary
 * Temperature measurements seems to be higher due to heat from ESP8266
 * ST7920 plate need to be cutted to fit enclosure
 * Can't connect to my old ASUS WL-500gP V2
 
 # Russian:
 Часы с синхронизацией времени по WI-FI, функцией измерения CO2, температуры, влажности, давления. Также есть автоматическое изменение подсветки в зависимости от освещения.
-Часы синхронизируются по NTP протоколу через WI-FI. Данные датчиков передаются на сервер Blynk.
+Часы синхронизируются по NTP протоколу через WI-FI. Данные датчиков передаются на сервер Blynk или Cayenne.
 
 ## Компоненты
 
@@ -84,6 +89,7 @@ VCC - 3V3
 
 * [Arduino-esp8266](https://github.com/esp8266/Arduino)
 * [Blynk](https://github.com/blynkkk/blynk-library)
+* [Cayenne](https://github.com/myDevicesIoT/Cayenne-MQTT-Arduino
 * [u8g2](https://github.com/olikraus/u8g2)
 * [Adafruit_BME280_Library](https://github.com/adafruit/Adafruit_BME280_Library)
 * [WiFiManager](https://github.com/tzapu/WiFiManager)
@@ -111,7 +117,7 @@ VCC - 3V3
 ```
 ## Известные проблемы:
 
-* Утечка памяти
+* Утечка памяти с библиотекой Blynk
 * ESP8266 греется и вносит погрешность в показания температуры, пока изолировал датчик BME-280 вспененным полиэтиленом
 * Пришлось немного подрезать плату дисплея ST7920 сверху, не входила по высоте
 * Не удалось подключить к роутеру ASUS WL-500gP V2 (видимо нужно разбираться с типом WI-FI сети на роутере)

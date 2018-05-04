@@ -20,7 +20,7 @@
 
 //Preferences
 // #define DEBUG //uncomment for debug messages
-// #define BLYNK //use Blynk or Cayenne data aggregator
+// #define BLYNK //uncomment for use Blynk, otherwise use Cayenne data aggregator
 
 #ifdef BLYNK
 #include <BlynkSimpleEsp8266.h> //Blynk
@@ -129,11 +129,10 @@ uint16_t lightHysteresisTime = 2500; //2.5 secs hysteresis for light sensor
 AsyncPing aping;
 
 WiFiUDP Udp;
-IPAddress ntpServerIP(89, 109, 251, 21); //NTP server IP ntp1.vniiftri.ru
+const char* ntpServerName = "0.ru.pool.ntp.org"; //NTP server (ntp2.stratum2.ru,ntp1.vniiftri.ru)
+IPAddress ntpServerIP;
 #ifdef BLYNK
 IPAddress pingServerIP(139, 59, 206, 133); //blynk serv for ping
-#else
-IPAddress pingServerIP(89, 109, 251, 21); //serv for ping
 #endif
 unsigned int localPort = 4567;  // local port to listen for UDP packets
 const int NTP_PACKET_SIZE = 48; // NTP time is in the first 48 bytes of message
@@ -157,6 +156,11 @@ String timestring = "";//TODO
 time_t getNtpTime() {
   while (Udp.parsePacket() > 0) ; // discard any previously received packets
   PRINTLNF("Transmit NTP Request");
+  #ifdef BLYNK
+  ntpServerIP = pingServerIP;
+  #else
+  WiFi.hostByName(ntpServerName, ntpServerIP); //get IP address
+  #endif
   sendNTPpacket(ntpServerIP);
   uint32_t beginWait = millis();
   while (millis() - beginWait < 1500) {
@@ -534,6 +538,7 @@ void readMeasurements() {
   }  
   if (adc_data > 370)
     light = adc_data;
+  uptime+=10;  //uptime
   
   PRINTLN("H: ", String(hf) + "%"); //Write to debug console
   PRINTLN("T: ", String(tf) + "C");
@@ -587,7 +592,7 @@ void sendMeasurements() {   // send to server
       Cayenne.virtualWrite(5, co2);
       Cayenne.virtualWrite(6, delta); //pressure delta
       Cayenne.virtualWrite(7, light); //light sensor
-      Cayenne.virtualWrite(8, numberOfHours(uptime+=30)); //uptime hours
+      Cayenne.virtualWrite(8, numberOfHours(uptime)); //uptime hours
       Cayenne.virtualWrite(9, ESP.getFreeHeap());
       Cayenne.loop();
   #endif  
@@ -613,7 +618,7 @@ bool connectBlynk() {
 
 void asyncPing() {
   if (WiFi.status() == WL_CONNECTED)
-    aping.begin(pingServerIP, 5, 1500);
+    aping.begin(ntpServerIP, 5, 1500);
   else
     connectedInetFlag = false;  
 }
@@ -1057,21 +1062,6 @@ void setup() {
     }
     drawBoot();
 
-    aping.on(false, [](const AsyncPingResponse & response) {
-      #if DEBUG
-      IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
-      Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", pingServerIP.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
-      if (response.mac)
-        Serial.printf("detected eth address " MACSTR "\n", MAC2STR(response.mac->addr));
-      #endif
-      if (response.total_recv > 0)
-        connectedInetFlag = true;
-      else
-        connectedInetFlag = false;
-      return true;
-    });
-    asyncPing();
-
     Udp.begin(localPort);// Setup time
     PRINTLN("Local port: ", Udp.localPort());
 
@@ -1084,6 +1074,21 @@ void setup() {
       PRINTLNF("Trying to sync");
       setTime(getNtpTime());
     }
+
+    aping.on(false, [](const AsyncPingResponse & response) {
+      #if DEBUG
+      IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
+      Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", addr.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
+      if (response.mac)
+        Serial.printf("detected eth address " MACSTR "\n", MAC2STR(response.mac->addr));
+      #endif
+      if (response.total_recv > 0)
+        connectedInetFlag = true;
+      else
+        connectedInetFlag = false;
+      return true;
+    });
+    asyncPing();
 
     #ifdef BLYNK
     // Start Blynk

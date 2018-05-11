@@ -144,7 +144,7 @@ String timestring = "";//TODO
 
 #include "graphics.h"
 
-#if DEBUG
+#ifdef DEBUG
 #define PRINTLNF(s)   { Serial.println(F(s)); }
 #define PRINTLN(s,v)  { Serial.print(F(s)); Serial.println(v); }
 #else

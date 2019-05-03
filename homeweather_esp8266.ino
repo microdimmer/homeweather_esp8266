@@ -61,7 +61,7 @@ char cayenne_clientID[] = "2dd4dd50-479e-11e8-bf56-db14f0c2b326";
 #endif
 // Device Id
 char device_id[17] = "Home Weather";
-const char fw_ver[17] = "0.1.21";
+const char fw_ver[17] = "0.1.22";
 // Handy timer
 SimpleTimer timer;
 // Setup Wifi connection

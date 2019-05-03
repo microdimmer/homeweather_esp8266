@@ -89,7 +89,7 @@ VCC - 3V3
 
 * [Arduino-esp8266](https://github.com/esp8266/Arduino)
 * [Blynk](https://github.com/blynkkk/blynk-library)
-* [Cayenne](https://github.com/myDevicesIoT/Cayenne-MQTT-Arduino
+* [Cayenne](https://github.com/myDevicesIoT/Cayenne-MQTT-Arduino)
 * [u8g2](https://github.com/olikraus/u8g2)
 * [Adafruit_BME280_Library](https://github.com/adafruit/Adafruit_BME280_Library)
 * [WiFiManager](https://github.com/tzapu/WiFiManager)

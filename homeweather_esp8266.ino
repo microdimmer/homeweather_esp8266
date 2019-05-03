@@ -61,7 +61,7 @@ char cayenne_clientID[] = "2dd4dd50-479e-11e8-bf56-db14f0c2b326";
 #endif
 // Device Id
 char device_id[17] = "Home Weather";
-const char fw_ver[17] = "0.1.0";
+const char fw_ver[17] = "0.1.21";
 // Handy timer
 SimpleTimer timer;
 // Setup Wifi connection
@@ -205,7 +205,7 @@ void sendNTPpacket(IPAddress &address) { // send an NTP request to the time serv
 
 void syncTime() {
   setTime(getNtpTime());
-  #if DEBUG
+  #ifdef DEBUG
     timeStatus_t t_status = timeStatus();
     if (t_status == timeNotSet) {
       PRINTLNF("Time never been synced");
@@ -641,18 +641,18 @@ bool loadConfig() {
 
   configFile.readBytes(buf.get(), size);
 
-  StaticJsonBuffer<200> jsonBuffer;
-  JsonObject &json = jsonBuffer.parseObject(buf.get());
-
-  if (!json.success()) {
+  StaticJsonDocument<200> jsonBuffer;
+//  JsonObject json = jsonBuffer.parseObject(buf.get());
+  auto error = deserializeJson(jsonBuffer, buf.get());
+  if (error) {
     PRINTLNF("Failed to parse config file");
     return false;
   }
 
-  timeZone = json["timeZone"];  // load parameters
-  light_auto_thresold = json["light_auto_thresold"];
-  light_auto_min = json["light_auto_min"];
-  light_auto_max = json["light_auto_max"];
+  timeZone = jsonBuffer["timeZone"];  // load parameters
+  light_auto_thresold = jsonBuffer["light_auto_thresold"];
+  light_auto_min = jsonBuffer["light_auto_min"];
+  light_auto_max = jsonBuffer["light_auto_max"];
   return true;
 }
 
@@ -662,14 +662,15 @@ bool writeConfig() {
   if (!configFile)
     return false;
 
-  DynamicJsonBuffer jsonBuffer;
-  JsonObject &json = jsonBuffer.createObject();
-  json["timeZone"] = timeZone;
-  json["light_auto_thresold"] = light_auto_thresold;
-  json["light_auto_min"] = light_auto_min;
-  json["light_auto_max"] = light_auto_max;
+  DynamicJsonDocument jsonBuffer(1024);
+//  JsonObject json = jsonBuffer.createObject();
+  jsonBuffer["timeZone"] = timeZone;
+  jsonBuffer["light_auto_thresold"] = light_auto_thresold;
+  jsonBuffer["light_auto_min"] = light_auto_min;
+  jsonBuffer["light_auto_max"] = light_auto_max;
 
-  json.printTo(configFile);
+//  jsonBuffer.printTo(configFile);
+  serializeJson(jsonBuffer, configFile);
   configFile.close();
   return true;
 }
@@ -696,22 +697,22 @@ bool loadConfigWiFI() {
   // use configFile.readString instead.
   configFile.readBytes(buf.get(), size);
 
-  StaticJsonBuffer<200> jsonBuffer;
-  JsonObject &json = jsonBuffer.parseObject(buf.get());
-
-  if (!json.success()) {
+  StaticJsonDocument<200> jsonBuffer;
+//  JsonObject json = jsonBuffer.parseObject(buf.get());
+  auto error = deserializeJson(jsonBuffer, buf.get());
+  if (error) {
     PRINTLNF("Failed to parse config file");
     return false;
   }
   // Save parameters
   #ifdef BLYNK 
-  strcpy(device_id, json["device_id"]);
-  strcpy(blynk_server, json["blynk_server"]);
-  strcpy(blynk_token, json["blynk_token"]);
+  strcpy(device_id, jsonBuffer["device_id"]);
+  strcpy(blynk_server, jsonBuffer["blynk_server"]);
+  strcpy(blynk_token, jsonBuffer["blynk_token"]);
   #else
-  strcpy(cayenne_username, json["cayenne_username"]);
-  strcpy(cayenne_password, json["cayenne_password"]);
-  strcpy(cayenne_clientID, json["cayenne_clientID"]);
+  strcpy(cayenne_username, jsonBuffer["cayenne_username"]);
+  strcpy(cayenne_password, jsonBuffer["cayenne_password"]);
+  strcpy(cayenne_clientID, jsonBuffer["cayenne_clientID"]);
   #endif
   return true;
 }
@@ -746,25 +747,26 @@ bool setupWiFi() {
 
   if (shouldSaveConfig) { //save the custom parameters to FS
     PRINTLNF("saving config");
-    DynamicJsonBuffer jsonBuffer;
-    JsonObject &json = jsonBuffer.createObject();
+    DynamicJsonDocument  jsonBuffer(1024);
     #ifdef BLYNK 
-    json["device_id"] = custom_device_id.getValue();
-    json["blynk_server"] = custom_blynk_server.getValue();
-    json["blynk_token"] = custom_blynk_token.getValue();
+    jsonBuffer["device_id"] = custom_device_id.getValue();
+    jsonBuffer["blynk_server"] = custom_blynk_server.getValue();
+    jsonBuffer["blynk_token"] = custom_blynk_token.getValue();
     #else
-    json["cayenne_username"] = custom_cayenne_username.getValue();
-    json["cayenne_password"] = custom_cayenne_password.getValue();
-    json["cayenne_clientID"] = custom_cayenne_clientID.getValue();
+    jsonBuffer["cayenne_username"] = custom_cayenne_username.getValue();
+    jsonBuffer["cayenne_password"] = custom_cayenne_password.getValue();
+    jsonBuffer["cayenne_clientID"] = custom_cayenne_clientID.getValue();
     #endif
     File configFile = SPIFFS.open("/configwifi.json", "w");
-    #if DEBUG
+    #ifdef DEBUG
     if (!configFile) {
-      PRINTLN("failed to open config file for writing");
+      PRINTLNF("failed to open config file for writing");
     }
-    json.printTo(Serial);
+    serializeJson(jsonBuffer, Serial);
+//    jsonBuffer.printTo(Serial);
     #endif
-    json.printTo(configFile);
+    serializeJson(jsonBuffer, configFile);
+//    jsonBuffer.printTo(configFile);
     configFile.close();
   }
 
@@ -1028,7 +1030,7 @@ void setup() {
   u8g2.begin();// init display
   drawBoot();
  
-  #if DEBUG
+  #ifdef DEBUG
     Serial.begin(115200); //debug sensor serial port
   #else
     wifiManager.setDebugOutput(false); //disable wifiManager debug output
@@ -1040,7 +1042,7 @@ void setup() {
   if (!bme.begin(0x76)) { // init Pressure/Temperature sensor
     PRINTLNF("Could not find a valid BME280 sensor, check wiring!");
   }
-
+  
   if (!SPIFFS.begin()) {  // init filesystem
     PRINTLNF("Failed to mount file system");
     ESP.reset();
@@ -1076,7 +1078,7 @@ void setup() {
     }
 
     aping.on(false, [](const AsyncPingResponse & response) {
-      #if DEBUG
+      #ifdef DEBUG
       IPAddress addr(response.addr); //to prevent with no const toString() in 2.3.0
       Serial.printf("total answer from %s sent %d recevied %d time %d ms\n", addr.toString().c_str(), response.total_sent, response.total_recv, response.total_time);
       if (response.mac)

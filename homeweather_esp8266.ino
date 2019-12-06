@@ -45,7 +45,8 @@ const uint8_t RX_PIN = 14; //D5, TX pin, GPIO14, for mz-h19
 U8G2_ST7920_128X64_F_SW_SPI u8g2(U8G2_R0,/*display-clock E,SCLK;esp-GPIO12,D6*/SCLK_PIN,/*display-data R/W;esp-GPIO13,D7*/RW_PIN,/*display-RS;esp-GPIO15,D8*/RS_PIN);
 // Humidity/Temperature/Pressure/CO2
 Adafruit_BME280 bme;
-SoftwareSerial swSer(RX_PIN, TX_PIN, false, 256);// CO2 SERIAL
+SoftwareSerial swSer(RX_PIN, TX_PIN);// CO2 SERIAL
+//SoftwareSerial swSer(RX_PIN, TX_PIN, false, 256);// CO2 SERIAL
 byte cmd[9] = {0xFF, 0x01, 0x86, 0x00, 0x00, 0x00, 0x00, 0x00, 0x79};
 unsigned char response[7];
 #ifdef BLYNK

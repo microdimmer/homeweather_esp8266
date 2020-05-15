@@ -9,7 +9,10 @@ Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, 
 * ST7920 128x64 LCD display
 * Humidity/Pressure/Temperature BME280
 * Photoresistor 5528 LDR
+* NPN transistor P2N2222A or similar
 * Buttons, resistors, wires, enclosure
+### Optional
+* TL431 (attention! need to cut JP3 on display)
 
 ## Photos:
 ![PHOTO1](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/front.jpg)
@@ -83,7 +86,10 @@ VCC - 3V3
 * ST7920 128x64 LCD-дисплей
 * датчик давления/влажности/температуры BME280
 * фоторезистор 5528 LDR
+* NPN тразистор P2N2222A или похожий
 * кнопки, резисторы, провода, корпус
+### Опционально
+* TL431 стабилизатор напряжения (внимание! если хотите использовать стабилизатор, нужно распаять джампер JP3 на дисплее)
 
 ## Библиотеки
 

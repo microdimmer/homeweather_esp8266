@@ -12,7 +12,7 @@ Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, 
 * NPN transistor P2N2222A or similar
 * Buttons, resistors, wires, enclosure
 ### Optional
-* TL431 (attention! need to cut JP3 on display)
+* TL431 for better display contrast adjust. (attention! need to cut JP3 on display)
 
 ## Photos:
 ![PHOTO1](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/front.jpg)
@@ -66,11 +66,20 @@ VCC - 3V3
 ```
 
 ## Scheme:
+### With TL431:
 ![СХЕМА](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/scheme.png)
+### Without TL431:
+![СХЕМА](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/scheme.png)
+### Jumper JP3:
+#### Cutted:
+![jumper_cut](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/jumper_cutted.png)
+#### Uncutted:
+![jumper_uncut](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/jumper_uncutted.png)
+
+Attention! JP3 need to be cutted to use TL431. TL431 is using for better display contrast adjust.
 
 ## Known issues:
 
-* Heap leak with Blynk lybrary
 * Temperature measurements seems to be higher due to heat from ESP8266
 * ST7920 plate need to be cutted to fit enclosure
 * Can't connect to my old ASUS WL-500gP V2
@@ -89,7 +98,7 @@ VCC - 3V3
 * NPN тразистор P2N2222A или похожий
 * кнопки, резисторы, провода, корпус
 ### Опционально
-* TL431 стабилизатор напряжения (внимание! если хотите использовать стабилизатор, нужно распаять джампер JP3 на дисплее)
+* TL431 стабилизатор напряжения, используется для более удобной настройки контраста дисплея, можно им пренебречь. (внимание! если хотите использовать стабилизатор, нужно распаять джампер JP3 на дисплее)
 
 ## Библиотеки
 
@@ -123,7 +132,6 @@ VCC - 3V3
 ```
 ## Известные проблемы:
 
-* Утечка памяти с библиотекой Blynk
 * ESP8266 греется и вносит погрешность в показания температуры, пока изолировал датчик BME-280 вспененным полиэтиленом
 * Пришлось немного подрезать плату дисплея ST7920 сверху, не входила по высоте
 * Не удалось подключить к роутеру ASUS WL-500gP V2 (видимо нужно разбираться с типом WI-FI сети на роутере)

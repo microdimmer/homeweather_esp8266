@@ -72,9 +72,9 @@ VCC - 3V3
 ![СХЕМА](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/scheme.png)
 ### Jumper JP3:
 #### Cutted:
-![jumper_cut](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/jumper_cutted.png)
+![jumper_cut](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/jumper_cutted.jpg)
 #### Uncutted:
-![jumper_uncut](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/jumper_uncutted.png)
+![jumper_uncut](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/jumper_uncutted.jpg)
 
 Attention! JP3 need to be cutted to use TL431. TL431 is using for better display contrast adjust.
 

@@ -12,11 +12,20 @@ Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, 
 * NPN transistor P2N2222A or similar
 * Buttons, resistors, wires, enclosure
 ### Optional
-* TL431 for better display contrast adjust. (attention! need to cut JP3 on display)
+* TL431 for better display contrast adjust. (attention! need to cut JP3 on display, see photos)
 
 ## Photos:
-![PHOTO1](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/front.jpg)
-![PHOTO2](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/disassembled.jpg)
+### Version with 3D-printed case and buttons
+![PHOTO1](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/photo_1.jpg)
+![PHOTO2](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/photo_2.jpg)
+![PHOTO3](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/photo_3.jpg)
+![PHOTO4](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/photo_4.jpg)
+### Version with purchased case and buttons
+![front_photo](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/front.jpg)
+![disassembled_photo](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/disassembled.jpg)
+
+## 3D models
+In stl folder
 
 ## Blynk and Cayenne:
 [Blynk docs](http://docs.blynk.cc/)
@@ -98,7 +107,7 @@ Attention! JP3 need to be cutted to use TL431. TL431 is using for better display
 * NPN тразистор P2N2222A или похожий
 * кнопки, резисторы, провода, корпус
 ### Опционально
-* TL431 стабилизатор напряжения, используется для более удобной настройки контраста дисплея, можно им пренебречь. (внимание! если хотите использовать стабилизатор, нужно распаять джампер JP3 на дисплее)
+* TL431 стабилизатор напряжения, используется для более удобной настройки контраста дисплея, можно им пренебречь. (внимание! если хотите использовать стабилизатор, нужно распаять джампер JP3 на дисплее, см. фото)
 
 ## Библиотеки
 

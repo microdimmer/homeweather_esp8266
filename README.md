@@ -23,6 +23,9 @@ Clock with auto backlight, NTP time-sync, measuring CO2, humidity, temperature, 
 ### Version with purchased case and buttons
 ![front_photo](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/front.jpg)
 ![disassembled_photo](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/disassembled.jpg)
+### Version with 3D-printed case and buttons from [ffnull](https://github.com/ffnull)
+![front_photo](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/photo_v2_1.jpg)
+![disassembled_photo](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/photo_v2_2.jpg)
 
 ## 3D models
 In stl folder

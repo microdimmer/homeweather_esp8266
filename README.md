@@ -83,17 +83,17 @@ VCC - 3V3
 ### Without TL431:
 ![СХЕМА](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/alternate_scheme.png)
 ### Jumper JP3:
-Attention! JP3 need to be cutted to use TL431. TL431 is using for better display contrast adjust.
-#### Cutted:
+Attention! JP3 need to be cut to use TL431. TL431 is using for better display contrast adjust.
+#### Cut:
 ![jumper_cut](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/jumper_cutted.jpg)
-#### Uncutted:
+#### Uncut:
 ![jumper_uncut](https://github.com/microdimmer/homeweather_esp8266/blob/master/readme/jumper_uncutted.jpg)
 
 
 ## Known issues:
 
 * Temperature measurements seems to be higher due to heat from ESP8266
-* ST7920 plate need to be cutted to fit enclosure
+* ST7920 plate need to be cut to fit enclosure
 * Can't connect to my old ASUS WL-500gP V2
 
 # Russian:
